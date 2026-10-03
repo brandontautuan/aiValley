@@ -2,6 +2,7 @@ import type { CompetitorOffer, ContextSignal, Explanation, Location, LocationOut
 import { localIso } from "../data/mock.ts";
 
 export * from "./competitorResearch.ts";
+export * from "./reviewMonitoring.ts";
 export * from "./tavilySearchTransport.ts";
 
 /**

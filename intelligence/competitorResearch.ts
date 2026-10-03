@@ -124,7 +124,7 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function stableId(prefix: string, value: string): string {
+export function stableId(prefix: string, value: string): string {
   // A deterministic non-cryptographic identifier is sufficient for a local
   // fixture/module boundary. Persistence can replace it with its own stable ID.
   let hash = 2166136261;

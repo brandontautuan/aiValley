@@ -31,6 +31,12 @@
 - The engine is unchanged. Across seeds 1–60 on 2026-10-05 it returned roughly 14% discounts, 26% capacity holds and 60% other keep-price decisions.
 - Every mock signal is titled "(mock)" and its adjustment is an assumption; `fixtureLabel` reads "Mock dataset #<seed> …".
 
+## Review monitoring
+- `intelligence/reviewMonitoring.ts`: `searchReviews({ locationId, locationName, planningDate, subjects }, transport)` runs one bounded Tavily search per configured business, restricted to `REVIEW_SITES`. It reuses the existing `TavilySearchTransport`.
+- A source is kept only when its title or excerpt names the business; search/list pages and navigation-text excerpts are dropped. Each excerpt is tagged with topics by keyword (`service`, `wait`, `price`, `taste`, `atmosphere`); no rating or sentiment is inferred. `REVIEW_LIMITATIONS` is returned with every response.
+- Wired as `POST /api/locations/:id/review-monitoring` (types `ReviewMonitoringResponse` etc. in contracts) and shown in the location page's "Check competitor reviews" panel.
+- Subjects are the store's `SF_COMPETITOR_PROFILES`. The demo chain itself is fictional, so its own reviews are not searched; a real business would be added as another subject.
+
 ## Live data snapshot (opt-in)
 - `data/fetch.ts` builds a snapshot from the internet and writes it to `.data/live/snapshot.json` (untracked): `node --experimental-strip-types data/fetch.ts`.
   - With no arguments it downloads the Maven Analytics public "Coffee Shop Sales" practice dataset (a fictitious chain with three New York stores, Jan–Jun 2023, so not a real business's sales; needs the `unzip` command), plus the Open-Meteo 16-day forecast and Nager.Date public holidays. None need a key.

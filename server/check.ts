@@ -44,6 +44,9 @@ try {
     const unavailableResearch = await call<{ results: Array<{ run: { status: string } }> }>("POST", "/api/locations/downtown/competitor-research", { date });
     assert.equal(unavailableResearch.status, 200);
     assert.ok(unavailableResearch.json.results.every((result) => result.run.status === "unavailable"));
+    const unavailableReviews = await call<{ results: Array<{ run: { status: string } }> }>("POST", "/api/locations/downtown/review-monitoring", { date });
+    assert.equal(unavailableReviews.status, 200);
+    assert.ok(unavailableReviews.json.results.length > 0 && unavailableReviews.json.results.every((result) => result.run.status === "unavailable"));
 
     let rec = (await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json;
     assert.equal(rec.revision, 1);
@@ -301,6 +304,11 @@ try {
       assert.equal(research.status, 200);
       assert.ok(research.json.results.every((result) => result.run.status === "completed"));
       assert.ok(research.json.results.flatMap((result) => result.evidence).every((evidence) => evidence.observationStatus === "needs_review" && evidence.priceCents === null));
+      // Review monitoring shares the transport; a source that does not name the business is dropped.
+      const reviews = await call<{ limitations: string[]; results: Array<{ run: { status: string }; mentions: unknown[] }> }>("POST", "/api/locations/downtown/review-monitoring", { date });
+      assert.equal(reviews.status, 200);
+      assert.ok(reviews.json.limitations.length > 0 && reviews.json.results.every((result) => result.run.status === "completed" && result.mentions.length === 0));
+      assert.equal((await call("POST", "/api/locations/nowhere/review-monitoring", { date })).status, 404);
     },
     {
       tavilySearchTransport: {

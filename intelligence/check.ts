@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { loadPlanningData, SF_COMPETITOR_PROFILES } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers } from "../engine/index.ts";
-import { BRAND_TONE, createTavilySearchTransport, generateExplanation, generateSocialDraft, normalizeRetrievedSource, searchCompetitorOffers, startCompetitorResearch, validateGeneratedContent, type ContentModel, type ContentPacket } from "./index.ts";
+import { BRAND_TONE, createTavilySearchTransport, generateExplanation, generateSocialDraft, normalizeRetrievedSource, searchCompetitorOffers, searchReviews, startCompetitorResearch, validateGeneratedContent, type ContentModel, type ContentPacket } from "./index.ts";
 
 const date = "2026-10-05";
 const data = loadPlanningData({ date, scenario: "typical" });
@@ -63,5 +63,30 @@ const batch = await searchCompetitorOffers(
 assert.equal(batch.results[0].run.status, "completed");
 assert.equal(batch.results[0].evidence[0].sourceUrl, "https://bluebottlecoffee.com/menu");
 assert.equal(batch.results[0].evidence[0].priceCents, null);
+
+// Review monitoring: unavailable without a transport; otherwise excerpts that name the business, tagged by topic only.
+const reviewInput = { locationId: "downtown", locationName: "Downtown, San Francisco", planningDate: date, subjects: SF_COMPETITOR_PROFILES.downtown.slice(0, 1) };
+assert.equal((await searchReviews(reviewInput, undefined))[0].run.status, "unavailable");
+let reviewRequest: { query: string; allowedDomains: string[] } | undefined;
+const [reviews] = await searchReviews(reviewInput, {
+  async search(request) {
+    reviewRequest = request;
+    return {
+      providerRequestId: "tavily-reviews",
+      sources: [
+        { url: "https://www.yelp.com/biz/blue-bottle", title: "Blue Bottle Coffee - Yelp", claimText: "Friendly staff but the line was slow and it is pricey.", retrievedAt: "2026-10-03T12:00:00Z" },
+        { url: "https://www.yelp.com/biz/other-cafe", title: "Other Cafe - Yelp", claimText: "Great espresso.", retrievedAt: "2026-10-03T12:00:00Z" },
+        { url: "not-a-url", title: "Blue Bottle Coffee", claimText: "Blue Bottle Coffee", retrievedAt: "2026-10-03T12:00:00Z" },
+        { url: "https://www.yelp.com/search?find_desc=Blue+Bottle", title: "Blue Bottle Coffee San Francisco", claimText: "Blue Bottle Coffee 4.4", retrievedAt: "2026-10-03T12:00:00Z" },
+        { url: "https://www.tripadvisor.com/Restaurant_Review-1", title: "Blue Bottle Coffee", claimText: "Skip to main content Sign in", retrievedAt: "2026-10-03T12:00:00Z" },
+      ],
+    };
+  },
+});
+assert.ok(reviewRequest!.query.includes('"Blue Bottle Coffee"') && reviewRequest!.allowedDomains.includes("yelp.com"));
+assert.equal(reviews.run.status, "completed");
+assert.deepEqual(reviews.mentions.map((mention) => [mention.sourceSite, mention.themes, mention.status]), [["yelp.com", ["service", "wait", "price"], "needs_review"]]);
+const failedReviews = await searchReviews(reviewInput, { async search() { throw new Error("down"); } });
+assert.equal(failedReviews[0].run.status, "failed");
 
 console.log("✓ intelligence checks passed");

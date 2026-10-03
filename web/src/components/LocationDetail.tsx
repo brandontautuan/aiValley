@@ -7,6 +7,7 @@ import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
 import { DecisionBar } from "./DecisionBar.tsx";
 import { CompetitorResearchPanel } from "./CompetitorResearchPanel.tsx";
+import { ReviewMonitoringPanel } from "./ReviewMonitoringPanel.tsx";
 import { DemandChart } from "./DemandChart.tsx";
 import { OptionCards } from "./OptionCards.tsx";
 import { PromotePanel } from "./PromotePanel.tsx";
@@ -106,6 +107,11 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
             <details className="panel disclosure">
               <summary><strong>Research nearby competitors</strong><span>Optional · Look up public sources for your own review.</span></summary>
               <div className="disclosure-body"><CompetitorResearchPanel locationId={locationId} date={date} /></div>
+            </details>
+
+            <details className="panel disclosure">
+              <summary><strong>Check competitor reviews</strong><span>Optional · See what customers say about nearby competitors.</span></summary>
+              <div className="disclosure-body"><ReviewMonitoringPanel locationId={locationId} date={date} /></div>
             </details>
           </div>
           <DecisionBar recommendation={rec} selected={selected} location={location} busy={pending} error={actionError} dirty={dirty} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />

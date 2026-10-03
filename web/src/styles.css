@@ -321,6 +321,7 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .research-source-body { padding: 0 10px 10px; }
 .research-source-body p:last-child { margin-bottom: 0; }
 .research-claim { line-height: 1.45; }
+.review-topic { margin: 0 6px 4px 0; }
 
 .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 28px 0 14px; scroll-margin-top: 16px; }
 .section-head h2 { font-size: 1.35rem; }

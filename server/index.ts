@@ -33,6 +33,7 @@ const routes: Array<[method: string, pattern: RegExp, handler: Handler]> = [
     /^\/api\/locations\/([\w-]+)\/competitor-research$/,
     (planner, [id], _query, body) => planner.competitorResearch(id, body as { date?: unknown }),
   ],
+  ["POST", /^\/api\/locations\/([\w-]+)\/review-monitoring$/, (planner, [id], _query, body) => planner.reviewMonitoring(id, body as { date?: unknown })],
 ];
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
