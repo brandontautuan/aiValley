@@ -1,6 +1,6 @@
 import type { LocationOutlookResponse, OverviewResponse, SavedPlan, ScenarioId } from "../../../contracts/index.ts";
 import { api } from "../api.ts";
-import { dateLabel, pct } from "../format.ts";
+import { dateLabel, pct, scenarioLabel } from "../format.ts";
 import { actionLabel, selectedCandidate, storeSentence } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
@@ -62,11 +62,12 @@ export function Today({ date, scenario }: { date: string; scenario: ScenarioId }
               <div className="store-reason">
                 <h3>{saved ? "Your team’s decision" : "Why this helps"}</h3>
                 <p>{saved ? "These are the terms your team approved. Open the decision to review or change them." : storeSentence(outlook)}</p>
-                {savedPlan && savedPlan.scenario !== scenario && <p className="small muted">Saved for {savedPlan.scenario === "typical" ? "a typical day" : "a local event day"}.</p>}
+                {savedPlan && savedPlan.scenario !== scenario && <p className="small muted">Saved for {scenarioLabel(savedPlan.scenario)}.</p>}
               </div>
               <details className="store-forecast">
                 <summary>See expected demand</summary>
-                <p className="small muted">Forecast for {scenario === "typical" ? "a typical day" : "a local event day"}. Helps you spot busy and quiet hours. These are customer orders, not individual items sold.</p>
+                <p className="small muted">Forecast for {scenarioLabel(scenario)}. Helps you spot busy and quiet hours. These are customer orders, not individual items sold.</p>
+                {scenario !== "typical" && <ul className="small muted">{outlook.contextSignals.filter((signal) => outlook.outlook.appliedSignalIds.includes(signal.id)).slice(0, 2).map((signal) => <li key={signal.id}>{signal.title}: {pct(signal.assumedOrderAdjustment)} assumed change in orders.</li>)}</ul>}
                 <MiniChart hours={outlook.outlook.hours} highlight={selected.kind === "discount" ? selected.terms.window : null} label={`${summary.location.name} hourly orders`} />
                 <p className="small"><strong>{Math.round(summary.totals.scenarioOrders)} orders expected</strong> · {pct(summary.changeVsUsual)} vs. a usual {weekday}.</p>
                 <p className="small muted">Based on {outlook.outlook.observationCount} past {weekday}s. {outlook.outlook.evidenceQuality !== "good" && "Limited history: treat this estimate with extra care."}</p>

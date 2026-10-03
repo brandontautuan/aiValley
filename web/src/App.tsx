@@ -10,6 +10,7 @@ import { BrandMark } from "./components/BrandMark.tsx";
 import { Strategy } from "./components/StrategyPanel.tsx";
 import { Today } from "./components/Today.tsx";
 import { Week } from "./components/Week.tsx";
+import { mockSeedOf, scenarioLabel } from "./format.ts";
 import { hrefFor, parseHash, routePath, type Route } from "./nav.ts";
 
 const DEFAULT_DATE = "2026-10-05";
@@ -106,9 +107,9 @@ export function App() {
         </div>
       </header>
       <div className="demo-strip">
-        <span>{brand.fixtureNotice}</span>
+        <span>{mockSeedOf(scenario) !== null ? `Mock data #${mockSeedOf(scenario)} · Random fictional sales, costs, and local signals; competitor offers are sample records. Forecasts are estimates.` : brand.fixtureNotice}</span>
         <details className="demo-settings">
-          <summary>{scenario === "local-event" ? "Local event day" : "Typical day"} · Demo settings</summary>
+          <summary>{scenarioLabel(scenario)} · Demo settings</summary>
           <div className="panel demo-options">
             <p>Try a different day to see how local events affect the suggestions.</p>
             <ScenarioToggle value={scenario} onChange={setScenario} compact />

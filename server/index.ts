@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { ApiFailure, createPlanner, type Planner } from "./planner.ts";
 import { createFileStore } from "./store.ts";
-import { createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
+import { createZooWorkContentModelFromEnv, createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
 import { createTavilySearchTransport } from "../intelligence/index.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -96,9 +96,10 @@ export function createApp(planner: Planner) {
 if (process.argv[1] === import.meta.filename) {
   const port = Number(process.env.PORT ?? 3000);
   const dataDir = resolve(ROOT, process.env.DATA_DIR ?? ".data");
-  const strategyWorkflow = await createZooWorkStrategyWorkflowFromEnv();
+  const [strategyWorkflow, model] = await Promise.all([createZooWorkStrategyWorkflowFromEnv(), createZooWorkContentModelFromEnv()]);
   const planner = createPlanner({
     store: createFileStore(dataDir),
+    model,
     // Missing credentials or SDK keep the manager-reviewable fallback available.
     strategyWorkflow,
     tavilySearchTransport: createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }),

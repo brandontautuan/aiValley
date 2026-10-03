@@ -32,6 +32,11 @@
 ## Dependencies requested from other roles
 None for this revision. Prior optional requests remain: B may add a range endpoint for Week/Month request efficiency; D may add more dated context records beyond Oct 5.
 
+## Integrated remote changes
+- Preserved the remote ZooWork adapter, data/engine changes, and dependency configuration without modifying their implementation.
+- Random mock-data scenarios remain available in Demo settings. Their seed, saved-plan labels, and URL state are preserved; applied mock/event signals appear inside each store’s expandable demand details.
+- The remote SocialMediaPlan receives current context and appears inside the optional social-post section.
+
 ## Known blockers and fallback behavior
 - Live API only; there is still no frontend mock adapter.
 - Competitor research needs server-side Tavily configuration; without it, the existing unavailable state preserves ordinary planning.

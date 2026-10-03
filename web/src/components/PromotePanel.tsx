@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { Explanation, Location, Recommendation, SocialDraft } from "../../../contracts/index.ts";
+import type { ContextSignal, Explanation, Location, Recommendation, SocialDraft } from "../../../contracts/index.ts";
 import { brand } from "../brand.ts";
 import { localTime, money, timestamp, windowLabel } from "../format.ts";
 import { BrandMark } from "./BrandMark.tsx";
+import { SocialMediaPlan } from "./SocialMediaPlan.tsx";
 
 const isDraft = (content: Explanation | SocialDraft): content is SocialDraft => "caption" in content;
 
@@ -16,12 +17,16 @@ export function PromotePanel({
   busy,
   onExplain,
   onDraft,
+  contextSignals,
+  appliedSignalIds,
 }: {
   recommendation: Recommendation;
   location: Location;
   busy: string | null;
   onExplain: () => void;
   onDraft: () => void;
+  contextSignals: ContextSignal[];
+  appliedSignalIds: string[];
 }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -135,6 +140,14 @@ export function PromotePanel({
             <p className="small">{socialDraft.creativeBrief}</p>
           </div>
         )}
+
+        <SocialMediaPlan
+          recommendation={recommendation}
+          location={location}
+          socialDraft={socialDraft}
+          contextSignals={contextSignals}
+          appliedSignalIds={appliedSignalIds}
+        />
 
         <div className="panel">
           <div className="panel-head">

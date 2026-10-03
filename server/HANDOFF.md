@@ -2,7 +2,7 @@
 
 ## Ready interfaces and paths
 - `server/index.ts`: thin `node:http` route table (see DESIGN.md §6), JSON bodies, `ApiError` responses, serves `web/dist` in production.
-- `server/planner.ts`: framework-free orchestration (`createPlanner({ store, model? })`).
+- `server/planner.ts`: framework-free orchestration (`createPlanner({ store, model? })`). `ZOOWORK_CONTENT_AGENT_ID` optionally supplies a server-only structured content model; templates remain the fallback.
 - `server/store.ts`: atomic JSON-file store in `$DATA_DIR/store.json` (default `.data/`, gitignored).
 - `POST /api/strategy-runs`, `GET /api/strategy-runs/:id`, and
   `POST /api/strategy-runs/:id/approve`: durable strategy workflow around the
@@ -37,7 +37,7 @@
 - Model content that comes back for an old revision is stored in `staleContent` and never attached as current.
 
 ## Known blockers and fallback behavior
-- No model adapter is wired: `createPlanner` accepts an optional `model`, and template content is used when it's absent.
+- `ZOOWORK_CONTENT_AGENT_ID` optionally supplies structured explanations and Instagram drafts. When it, credentials, SDK, or the provider are unavailable—or output fails validation—the deterministic templates remain active.
 - `POST /api/locations/:id/competitor-research` refreshes only configured coffee-shop profile seeds. With no Tavily key it returns per-profile `unavailable` states; sources always remain `needs_review` and cannot alter pricing or social copy.
 - `createPlanner` accepts an optional server-only `strategyWorkflow` adapter.
   It may return ZooWork and Band identifiers plus bounded research evidence.
@@ -56,3 +56,13 @@
 - The adapter normalizes returned evidence. Only explicitly verified, attributed
   records receive `verified`; incomplete or unverified records remain visible as
   `needs_review` and planner ranking excludes them.
+- `createZooWorkContentModelFromEnv` uses `ZOOWORK_CONTENT_AGENT_ID` (or the
+  configured strategy agent as a demo fallback) and sends only a bounded
+  planning packet. It never sends raw Tavily results. The planner validates all
+  content before saving it to a revision.
+- `scenario` accepts `mock-<seed>` (1–9 digits) in addition to `typical` and `local-event`; `ScenarioId` in contracts reflects this.
+- The content packet carries `selected.weekday`; social copy that names any
+  other day of the week is rejected and the template is used.
+- Strategy requests now carry their own `instructions` (output shape, review
+  only supplied evidence, never mark items verified), so any running agent
+  owned by the key's Project can serve `ZOOWORK_AGENT_ID`.

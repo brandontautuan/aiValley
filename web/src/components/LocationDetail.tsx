@@ -99,7 +99,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
               <summary><strong>Prepare a social post</strong><span>Optional · Create a caption to copy and post yourself.</span></summary>
               <div className="disclosure-body">
                 <p className="muted">A post is optional. Create it before approving if you want the caption included in the saved plan. Captions created after approval can be copied here, but are not added to the already saved plan.</p>
-                <PromotePanel recommendation={rec} location={location} busy={dirty ? "unsaved" : pending} onExplain={explain} onDraft={draft} />
+                <PromotePanel recommendation={rec} location={location} busy={dirty ? "unsaved" : pending} onExplain={explain} onDraft={draft} contextSignals={outlook.data.contextSignals} appliedSignalIds={forecast.appliedSignalIds} />
               </div>
             </details>
 

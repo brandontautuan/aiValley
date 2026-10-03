@@ -24,7 +24,7 @@ export function parseHash(hash = window.location.hash): { route: Route; params: 
   const date = search.get("date");
   const scenario = search.get("scenario");
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) params.date = date;
-  if (scenario && SCENARIO_IDS.includes(scenario as ScenarioId)) params.scenario = scenario as ScenarioId;
+  if (scenario && (SCENARIO_IDS.includes(scenario as ScenarioId) || /^mock-\d{1,9}$/.test(scenario))) params.scenario = scenario as ScenarioId;
 
   let route: Route = { page: "today" };
   if (page === "location" && id) route = { page: "location", id };

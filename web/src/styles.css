@@ -355,6 +355,14 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .promote { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; margin-bottom: 16px; }
 .promote-side { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .promote-side .panel { margin: 0; }
+.social-plan h3 { margin: 2px 0 0; font-size: 1.15rem; }
+.social-signals { margin: 12px 0; padding: 9px 10px; border-radius: 8px; background: var(--surface-2); font-size: 0.88rem; }
+.social-plan-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.social-plan-steps li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.social-step-num { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent-strong); font-size: 0.78rem; font-weight: 700; }
+.social-step-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.social-plan-steps p { margin: 3px 0 0; }
+.social-plan-note { margin: 14px 0 0; font-size: 0.82rem; color: var(--muted); }
 .phone { flex: 0 0 auto; width: min(340px, 100%); border-radius: 38px; background: var(--ink); padding: 12px; }
 .screen { position: relative; overflow: hidden; border-radius: 28px; background: #ffffff; color: #14201a; }
 .post-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-size: 0.85rem; }

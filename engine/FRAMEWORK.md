@@ -21,16 +21,16 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Raw demand shown separately from serviceable orders | ✅ | — |
 | Holiday effects location-specific or labeled | ✅ via fixtures + `ENGINE_ASSUMPTIONS` | — |
 | Always include regular price; evaluate 5% and 10% | ✅ | — |
-| One predefined bundle **if agreed** | ⚠️ no separate bundle candidate, but since the coffee-shop pivot the default item (Coffee & Pastry Pair) is itself a bundle-category item | C3 (optional) |
+| One predefined bundle **if agreed** | ✅ the default item (Coffee & Pastry Pair) is a predefined bundle; its cost covers all components and the cannibalization limit is labeled via `BUNDLE_LIMITATION` (C3 done). Per-candidate attachment needs a contract field | request to B (optional) |
 | Contribution, break-even, reject nonpositive before dividing | ✅ | — |
 | Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Kept, and stated in `ENGINE_ASSUMPTIONS` (C6 done). | — |
 | Distinguish raw vs serviceable units; compare scenarios consistently | ✅ item units scaled to serviceable orders; response units capped at capacity (C2 done). Raw item units are not exposed: needs a contract field | request to B (optional) |
 | Report missing costs **and substitution/cannibalization limitations** | ✅ `MISSING_COST` is an error on discounts and a warning on keep-price; cannibalization stated in `ENGINE_ASSUMPTIONS` (C6 done) | — |
 | Demand response is explicit low/base/high assumption, no learned elasticity | ✅ low +0%, base 1.5×, high 3× the discount % (C1 done) | — |
-| Cautious trial/no-change when response evidence is missing | ✅ keep-price; trial optional | C4 |
+| Cautious trial/no-change when response evidence is missing | ✅ keep-price by default; optional cautious 5% trial behind `ENGINE_POLICY.sparseTrial` (C4 done) | — |
 | Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ (no customer-level inputs exist) | — |
 | Overlap check includes **channel** | ⚠️ ignored, because `OfferTerms` has no channel field | request to B (optional) |
-| Checks: $14, closed hours, missing cost, overlap, discount limit, sparse, event hours, arena no-change | ⚠️ all present, but $180 / $197.60 are plain arithmetic, not run through `evaluateOffers` | C7 |
+| Checks: $14, closed hours, missing cost, overlap, discount limit, sparse, event hours, arena no-change | ✅ all present; the $14 example also runs end to end through `evaluateOffers` (C7 done) | — |
 
 Architecture stays as the design defines it:
 - one backend
@@ -99,16 +99,16 @@ Changing any export's shape needs Role B's agreement first, since B, A and D all
 ### Guardrails (`ValidationIssue.code`)
 `DISCOUNT_ABOVE_CEILING`, `INVALID_DISCOUNT`, `NONPOSITIVE_CONTRIBUTION`, `BELOW_MIN_CONTRIBUTION`, `MISSING_COST`, `STALE_COST`, `CLOSED_HOURS`, `INVALID_WINDOW`, `ITEM_NOT_ELIGIBLE`, `OVERLAPPING_OFFER` (all errors). `CAPACITY_CONFLICT` and `SPARSE_HISTORY` are warnings.
 
-Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on every candidate; the rest apply to discount candidates only, except that keep-price with an unknown cost gets `MISSING_COST` as a warning. `OVERLAPPING_OFFER` matches on location, item and overlapping window. `CAPACITY_CONFLICT` fires when any window hour's scenario orders, lifted by the high response, reach `capacityWarningShare` × capacity.
+Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on every candidate; the rest apply to discount candidates only (including `ITEM_NOT_ELIGIBLE` for an item with `offerEligible: false`), except that keep-price with an unknown cost gets `MISSING_COST` as a warning. `OVERLAPPING_OFFER` matches on location, item and overlapping window. `CAPACITY_CONFLICT` fires when any window hour's scenario orders, lifted by the high response, reach `capacityWarningShare` × capacity.
 
 ### Selection
 1. `capacity-peak` → keep price
-2. sparse evidence → keep price
+2. sparse evidence → keep price. If `sparseTrial` is on and the window is soft: the smallest discount only, when its base units ≥ break-even.
 3. `soft-window` → the best valid discount with no `CAPACITY_CONFLICT` whose base units ≥ break-even. Highest base contribution wins; if none qualifies, keep price.
 4. Otherwise → keep price (demand within usual range)
 
 ### Verified (`engine/check.ts`)
-- $14 example via `discountedPriceCents`/`breakEvenUnits` (the $180 and $197.60 figures are plain arithmetic, see C7), and the nonpositive contribution guard
+- $14 example via `discountedPriceCents`/`breakEvenUnits` and end to end through `evaluateOffers` on a minimal inline dataset, and the nonpositive contribution guard
 - Downtown's soft window is 14:00–17:00 on the Coffee & Pastry Pair, but since C1 neither 5% nor 10% reaches break-even in the base scenario, so Downtown keeps price. The check asserts the exact response values and that outcome.
 - The Arena event changes only Arena 16:00–20:00 and isn't double-counted; Arena keeps price, and its discounts are flagged with `CAPACITY_CONFLICT`
 - Every guardrail code except `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning, which no check asserts
@@ -120,7 +120,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ## 4. Work queue
 
-Order: **C1 (done) → C2 (done) → C6 (done) → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
+Order: **C1, C2, C6, C7, C4, C3 are done.** Only optional **C5** remains, and only if the team agrees.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
 Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
@@ -141,13 +141,19 @@ Orders are capped today, but item units and response-scenario units are not.
 - Add an `ENGINE_ASSUMPTIONS` line.
 - **Check:** in the Arena event, discount scenarios can't exceed serviceable units, and reference contribution compares consistently with keep-price.
 
-### C3. Predefined bundle (optional per design: "if agreed") — premise changed by the coffee-shop pivot
+### C3. Predefined bundle — DONE (as bundle labeling)
+Outcome: `BUNDLE_LIMITATION` in `ENGINE_ASSUMPTIONS`, `candidateLimitations()` helper, and discounts on `offerEligible: false` items rejected with `ITEM_NOT_ELIGIBLE`. No issue code fits the bundle note, so a contract request is in `HANDOFF.md`.
+
+Background:
 The bowl fixtures are gone. The default item filter now uses `MenuItem.offerEligible`, and the default item at every location is already a bundle-category item (Coffee & Pastry Pair), priced and checked like any other item; its `variableCostCents` covers its components. The Residential-only item is now the Weekend Breakfast Set (`category: "food"`).
 - No engine work is needed unless the team wants a *second*, location-specific candidate (e.g. the Weekend Breakfast Set at Residential) alongside the default item. That needs agreement on which item, and from B only if `OfferCandidate.kind` should distinguish it.
 - Add a substitution/cannibalization limitation note either way; the design requires it (also listed in C6).
 - **Check (if built):** Residential evaluates the extra item; Downtown and Arena never get it.
 
-### C4. Selection and policy tuning (engine-only)
+### C4. Selection and policy tuning (engine-only) — DONE
+Outcome: `ENGINE_POLICY` exported with all tunables; behavior unchanged with the default `sparseTrial: false`. Finding: break-even rounds up to whole units, so in low-volume windows a 5% offer cannot clear it even at near-zero cost (see `HANDOFF.md`).
+
+Original brief:
 - The design suggests a *cautious trial* for low evidence instead of a flat keep-price. Option: allow only the smallest discount (5%) when evidence is sparse and the window is soft. Keep it off if the team prefers a stricter demo.
 - Move tunables (`ADJUSTMENT_BOUNDS`, `CLASSIFICATION_THRESHOLD`, `SOFT_WINDOW_SHARE`, response values) into one exported `ENGINE_POLICY` constant. The UI can then show them, and later B could move them into `ChainPolicy`.
 
@@ -164,7 +170,7 @@ The bowl fixtures are gone. The default item filter now uses `MenuItem.offerElig
 - **Missing cost on keep-price.** Attach `MISSING_COST` as a *warning* to the no-change candidate when cost is unknown, so the manager sees contribution can't be shown. Keep-price itself stays valid.
 - **Break-even basis.** Add an `ENGINE_ASSUMPTIONS` line: "Break-even compares against expected units at the regular price for this scenario, not the raw historical baseline."
 
-### C7. Strengthen checks (engine-only)
+### C7. Strengthen checks (engine-only) — DONE
 - Build a minimal `PlanningData` fixture inside `engine/check.ts` (one location, one item at $14 / $5, 20 reference units in a window). Assert via `evaluateOffers`: 1260¢ price, 760¢ contribution, 18,000¢ reference contribution, break-even 24, and 19,760¢ for a 26-unit scenario.
 
 ---

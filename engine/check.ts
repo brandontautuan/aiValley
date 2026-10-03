@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import type { OfferTerms } from "../contracts/index.ts";
+import type { OfferTerms, PlanningData } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
-import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
+import { breakEvenUnits, BUNDLE_LIMITATION, calculateLocationOutlook, candidateLimitations, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
 
 const date = "2026-10-05";
 
@@ -13,6 +13,52 @@ assert.equal(20 * (1400 - 500), 18_000);
 assert.equal(breakEvenUnits(20, 1400, price, 500), 24);
 assert.equal(Math.round(26 * (price - 500)), 19_760);
 assert.equal(breakEvenUnits(20, 1400, 400, 500), null, "nonpositive contribution must not divide");
+
+// The same $14 / $5 / 20-unit example, end to end through the engine on a minimal inline dataset.
+{
+  const window = { date, startHour: 14, endHour: 17 };
+  const unitsByHour: Record<number, number> = { 14: 7, 15: 7, 16: 6 }; // 20 units across the window
+  const mondays = ["2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"];
+  const openHours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+  const example: PlanningData = {
+    request: { date, scenario: "typical" },
+    fixtureLabel: "engine/check.ts inline example",
+    chain: { id: "example-chain", name: "Example Chain", currency: "USD", policy: { maxDiscountPct: 10, minContributionPerUnitCents: 300, costFreshnessDays: 60, capacityWarningShare: 0.9 } },
+    locations: [{ id: "example", chainId: "example-chain", name: "Example Shop", timezone: "America/Los_Angeles", latitude: 0, longitude: 0, openingHours: { open: 10, close: 20 }, hourlyCapacityOrders: 100, profile: "inline example" }],
+    menu: [{ id: "example-pair", name: "Example Pair", category: "bundle", offerEligible: true, regularPriceCents: 1400, variableCostCents: 500, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ["example"] }],
+    orderTotals: mondays.flatMap((day) => openHours.map((hour) => ({ locationId: "example", date: day, hour, orders: 10, promotion: false }))),
+    itemSales: mondays.flatMap((day) =>
+      openHours.map((hour) => {
+        const units = unitsByHour[hour] ?? 10;
+        return { locationId: "example", itemId: "example-pair", date: day, hour, units, revenueCents: units * 1400, effectivePriceCents: 1400, promotion: false };
+      }),
+    ),
+    contextSignals: [],
+    competitorOffers: [],
+  };
+  const outlook = calculateLocationOutlook(example, { date, scenario: "typical", locationId: "example" });
+  assert.equal(outlook.evidenceQuality, "good");
+  const [keepPrice, tenPct] = evaluateOffers(example, outlook, { locationId: "example", itemId: "example-pair", window, discountPct: 10 });
+
+  assert.equal(keepPrice.kind, "no-change");
+  assert.equal(keepPrice.referenceUnits, 20);
+  assert.equal(keepPrice.referenceContributionCents, 18_000, "baseline contribution is $180");
+
+  assert.deepEqual(tenPct.issues, []);
+  assert.equal(tenPct.valid, true);
+  assert.equal(tenPct.proposedPriceCents, 1260);
+  assert.equal(tenPct.contributionPerUnitCents, 760);
+  assert.equal(tenPct.referenceUnits, 20);
+  assert.equal(tenPct.referenceContributionCents, 18_000);
+  assert.equal(tenPct.breakEvenUnits, 24);
+  // The 26-unit scenario from the design is the high response here (20 units + 30%).
+  const high = tenPct.responseScenarios.find((scenario) => scenario.label === "high")!;
+  assert.equal(high.units, 26);
+  assert.equal(high.contributionCents, 19_760, "26 units at $7.60 is $197.60");
+  assert.ok(high.units >= tenPct.breakEvenUnits! && high.contributionCents > tenPct.referenceContributionCents!, "26 units clears the 24-unit break-even");
+  assert.equal(26 * tenPct.contributionPerUnitCents!, 19_760);
+  assert.equal(breakEvenUnits(tenPct.referenceUnits, tenPct.regularPriceCents, tenPct.proposedPriceCents, tenPct.variableCostCents!), 24);
+}
 
 const outlookFor = (locationId: string, scenario: "typical" | "local-event") => {
   const data = loadPlanningData({ date, scenario });
@@ -167,6 +213,113 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
 // Assumptions name the daypart fallback, cannibalization and the break-even basis.
 for (const phrase of ["daypart", "cannibalization", "Break-even compares against expected units at the regular price"]) {
   assert.ok(ENGINE_ASSUMPTIONS.some((assumption) => assumption.includes(phrase)), `assumptions mention ${phrase}`);
+}
+
+// ENGINE_POLICY holds every tunable; the cautious sparse trial is off by default.
+{
+  assert.deepEqual(
+    { ...ENGINE_POLICY, dayparts: ENGINE_POLICY.dayparts.map((daypart) => daypart.id) },
+    {
+      comparableWeeks: 8,
+      minObservations: 4,
+      adjustmentBounds: { min: -0.5, max: 1 },
+      focusWindowHours: 3,
+      softWindowShare: 0.6,
+      classificationThreshold: 0.1,
+      responsePerDiscountPct: { low: 0, base: 1.5, high: 3 },
+      dayparts: ["morning", "lunch", "afternoon", "dinner"],
+      sparseTrial: false,
+    },
+  );
+  assert.equal(DAYPARTS, ENGINE_POLICY.dayparts);
+
+  const data = loadPlanningData({ date, scenario: "typical" });
+  const recent = <T extends { date: string }>(buckets: T[]) => buckets.filter((bucket) => bucket.date >= "2026-09-20");
+  const sparse = { ...data, orderTotals: recent(data.orderTotals), itemSales: recent(data.itemSales) };
+  const outlook = calculateLocationOutlook(sparse, { date, scenario: "typical", locationId: "downtown" });
+  assert.equal(outlook.evidenceQuality, "sparse");
+  assert.equal(outlook.focusReason, "soft-window");
+  const kindAndPct = (candidates: ReturnType<typeof evaluateOffers>, sparseTrial?: boolean, from = outlook) => {
+    const selection = sparseTrial === undefined ? selectRecommendedCandidate(candidates, from) : selectRecommendedCandidate(candidates, from, { sparseTrial });
+    const selected = candidates.find((candidate) => candidate.id === selection.selectedCandidateId)!;
+    return { kind: selected.kind, pct: selected.terms.discountPct, reason: selection.reason };
+  };
+
+  // Fixture costs: even the 5% base scenario misses break-even, so both settings keep price.
+  const atFixtureCost = evaluateOffers(sparse, outlook);
+  assert.equal(kindAndPct(atFixtureCost).kind, "no-change");
+  assert.equal(kindAndPct(atFixtureCost, false).kind, "no-change");
+  assert.equal(kindAndPct(atFixtureCost, true).kind, "no-change");
+
+  // A low-cost, high-volume item where both discounts clear break-even in the base scenario.
+  // (Volume matters: break-even rounds up to whole units, which a +7.5% response on ~13 units cannot reach.)
+  const itemId = atFixtureCost[0].terms.itemId;
+  const lowCost = {
+    ...sparse,
+    menu: sparse.menu.map((item) => (item.id === itemId ? { ...item, variableCostCents: 100 } : item)),
+    itemSales: sparse.itemSales.map((bucket) => (bucket.itemId === itemId ? { ...bucket, units: bucket.units * 10 } : bucket)),
+  };
+  const lowCostOutlook = calculateLocationOutlook(lowCost, { date, scenario: "typical", locationId: "downtown" });
+  assert.deepEqual([lowCostOutlook.evidenceQuality, lowCostOutlook.focusReason], ["sparse", "soft-window"]);
+  const candidates = evaluateOffers(lowCost, lowCostOutlook);
+  assert.equal(candidates[0].terms.itemId, itemId);
+  for (const candidate of candidates.filter((entry) => entry.kind === "discount")) {
+    assert.ok(candidate.valid && candidate.responseScenarios[1].units >= candidate.breakEvenUnits!, `${candidate.terms.discountPct}% clears break-even at low cost`);
+  }
+  assert.equal(kindAndPct(candidates, undefined, lowCostOutlook).kind, "no-change", "default policy keeps price on sparse history");
+  assert.equal(kindAndPct(candidates, false, lowCostOutlook).kind, "no-change");
+  const trial = kindAndPct(candidates, true, lowCostOutlook);
+  assert.deepEqual([trial.kind, trial.pct], ["discount", 5], "the trial allows only the smallest discount, never 10%");
+  assert.match(trial.reason, /Cautious trial of 5% off/);
+
+  // The switch has no effect when history is good or when capacity is the concern.
+  for (const [locationId, scenario] of [["downtown", "typical"], ["arena", "local-event"]] as const) {
+    const good = outlookFor(locationId, scenario);
+    const goodCandidates = evaluateOffers(good.data, good.outlook);
+    assert.deepEqual(selectRecommendedCandidate(goodCandidates, good.outlook, { sparseTrial: true }), selectRecommendedCandidate(goodCandidates, good.outlook));
+  }
+}
+
+// Bundles, offer eligibility and location eligibility (C3).
+{
+  assert.match(BUNDLE_LIMITATION, /cannibalization/);
+  assert.match(BUNDLE_LIMITATION, /covering every component/);
+  assert.ok(ENGINE_ASSUMPTIONS.includes(BUNDLE_LIMITATION));
+
+  for (const locationId of ["downtown", "arena", "residential"]) {
+    for (const scenario of ["typical", "local-event"] as const) {
+      const { data, outlook } = outlookFor(locationId, scenario);
+      const candidates = evaluateOffers(data, outlook);
+      for (const candidate of candidates) {
+        const item = data.menu.find((entry) => entry.id === candidate.terms.itemId)!;
+        assert.ok(item.offerEligible, `${item.name} is offer-eligible`);
+        assert.notEqual(item.id, "drip-coffee", "Drip Coffee never gets a default candidate");
+        assert.ok(item.eligibleLocationIds.includes(locationId));
+        // The default item is the Coffee & Pastry Pair, a predefined bundle: every candidate carries the note.
+        assert.equal(item.category, "bundle");
+        assert.deepEqual(candidateLimitations(data, candidate), [BUNDLE_LIMITATION]);
+      }
+      // The Weekend Breakfast Set only appears at Residential.
+      assert.equal(outlook.items.some((item) => item.itemId === "weekend-breakfast-set"), locationId === "residential");
+    }
+  }
+
+  const { data, outlook } = outlookFor("downtown", "typical");
+  const window = { date, startHour: 14, endHour: 17 };
+  // A non-bundle item carries no bundle note.
+  const latte = evaluateOffers(data, outlook, { locationId: "downtown", itemId: "iced-latte", window, discountPct: 5 });
+  assert.ok(latte.every((candidate) => candidateLimitations(data, candidate).length === 0));
+  assert.equal(latte[1].valid, true);
+  // Drip Coffee cannot be discounted even when a manager asks for it; keeping its price is fine.
+  const [dripKeep, dripDiscount] = evaluateOffers(data, outlook, { locationId: "downtown", itemId: "drip-coffee", window, discountPct: 5 });
+  assert.deepEqual(dripKeep.issues, []);
+  assert.ok(dripDiscount.issues.some((issue) => issue.code === "ITEM_NOT_ELIGIBLE" && issue.severity === "error"));
+  assert.equal(dripDiscount.valid, false);
+  // The Weekend Breakfast Set is rejected outside Residential and accepted there.
+  assert.equal(evaluateOffers(data, outlook, { locationId: "downtown", itemId: "weekend-breakfast-set", window, discountPct: 5 })[1].valid, false);
+  const residential = outlookFor("residential", "typical");
+  const breakfast = evaluateOffers(residential.data, residential.outlook, { locationId: "residential", itemId: "weekend-breakfast-set", window: { date, startHour: 13, endHour: 16 }, discountPct: 5 })[1];
+  assert.ok(!breakfast.issues.some((issue) => issue.code === "ITEM_NOT_ELIGIBLE"));
 }
 
 console.log("✓ engine checks passed");

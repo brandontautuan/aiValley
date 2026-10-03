@@ -14,9 +14,11 @@ import {
   MENU,
   UNITS_PER_ORDER,
 } from "./fixtures.ts";
+import { loadMockPlanningData, mockSeed } from "./mock.ts";
 
 export { DEFAULT_PLANNING_DATE, FIXTURE_LABEL } from "./fixtures.ts";
 export { SF_COMPETITOR_PROFILES } from "./fixtures.ts";
+export { mockLabel, mockSeed } from "./mock.ts";
 
 export const SCENARIOS: Array<{ id: ScenarioId; label: string }> = [
   { id: "typical", label: "Typical day" },
@@ -109,6 +111,8 @@ export function loadPlanningData(request: Partial<PlanningRequest> = {}): Planni
     scenario: request.scenario ?? "typical",
     ...(request.locationId ? { locationId: request.locationId } : {}),
   };
+  const seed = mockSeed(normalized.scenario);
+  if (seed !== null) return loadMockPlanningData(normalized, seed);
   const history = generateHistory();
   return {
     request: normalized,
