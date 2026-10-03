@@ -19,7 +19,8 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   return { data, outlook: calculateLocationOutlook(data, { date, scenario, locationId }) };
 };
 
-// Downtown: soft afternoon → discount trial.
+// Downtown: soft afternoon, but under the conservative response assumptions (C1)
+// neither discount's base scenario reaches break-even → keep price.
 {
   const { data, outlook } = outlookFor("downtown", "typical");
   assert.equal(outlook.focusReason, "soft-window");
@@ -27,10 +28,22 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   assert.ok(outlook.observationCount >= 7, "promotion hours are excluded but history is not sparse");
   const candidates = evaluateOffers(data, outlook);
   assert.deepEqual(candidates.map((candidate) => candidate.kind), ["no-change", "discount", "discount"]);
+  assert.ok(candidates.every((candidate) => candidate.itemName === "Coffee & Pastry Pair"));
+
+  // Response assumptions: low = no response, base = 1.5 × discount %, high = 3 × discount %.
+  const [, fivePct, tenPct] = candidates;
+  assert.deepEqual(fivePct.responseScenarios.map((scenario) => [scenario.label, scenario.assumedUnitChange]), [["low", 0], ["base", 0.075], ["high", 0.15]]);
+  assert.deepEqual(tenPct.responseScenarios.map((scenario) => [scenario.label, scenario.assumedUnitChange]), [["low", 0], ["base", 0.15], ["high", 0.3]]);
+  for (const candidate of [fivePct, tenPct]) {
+    const [low, base] = candidate.responseScenarios;
+    assert.equal(low.units, candidate.referenceUnits, "low scenario assumes no extra units");
+    assert.ok(low.contributionCents < candidate.referenceContributionCents!, "a discount with no response loses contribution");
+    assert.ok(candidate.valid && base.units < candidate.breakEvenUnits!, "base response stays below break-even");
+  }
+
   const selection = selectRecommendedCandidate(candidates, outlook);
-  const selected = candidates.find((candidate) => candidate.id === selection.selectedCandidateId)!;
-  assert.equal(selected.kind, "discount");
-  assert.equal(selected.itemName, "Coffee & Pastry Pair");
+  assert.equal(selection.selectedCandidateId, candidates[0].id);
+  assert.match(selection.reason, /no discount clears its break-even/);
 }
 
 // Arena: event changes only arena event hours, and leads to keep-price.
