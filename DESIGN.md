@@ -8,7 +8,7 @@ The complete workflow is:
 
 **Historical orders and local signals → demand outlook → offer comparison → AI explanation and social draft → manager review → saved action plan.**
 
-Assume a 24–48 hour hackathon, one fictional bowl restaurant brand, three locations, five menu items, and an hourly outlook for a selected planning date. The proposed layout below is a starting structure, not a description of an existing repository. Adapt paths once during setup if needed, then freeze ownership.
+Assume a 24–48 hour hackathon, one fictional coffee-shop brand, three locations, five menu items, and an hourly outlook for a selected planning date. The proposed layout below is a starting structure, not a description of an existing repository. Adapt paths once during setup if needed, then freeze ownership.
 
 ### Essential capabilities
 

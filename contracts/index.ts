@@ -65,7 +65,9 @@ export interface Location {
 export interface MenuItem {
   id: string;
   name: string;
-  category: "bowl" | "bundle";
+  category: "coffee" | "food" | "bundle";
+  /** Explicitly controls whether this item may receive a promotion candidate. */
+  offerEligible: boolean;
   regularPriceCents: Cents;
   /** Ingredients, packaging and estimated transaction cost. Null when unknown. */
   variableCostCents: Cents | null;

@@ -2,7 +2,7 @@ import type { Chain, CompetitorOffer, ContextSignal, Location, MenuItem } from "
 import type { CompetitorProfile } from "../intelligence/competitorResearch.ts";
 
 /** Fictional demo chain. Nothing here is live restaurant, event or competitor data. */
-export const FIXTURE_LABEL = "Demo fixtures — fictional chain, events and competitors; not live data";
+export const FIXTURE_LABEL = "Demo fixtures — fictional coffee chain, events and competitors; not live data";
 
 /** Fixed so the demo is repeatable regardless of today's date. A Monday. */
 export const DEFAULT_PLANNING_DATE = "2026-10-05";
@@ -12,8 +12,8 @@ export const HISTORY_END_DATE = "2026-10-04";
 export const HISTORY_WEEKS = 8;
 
 export const CHAIN: Chain = {
-  id: "bowlhouse",
-  name: "Bowlhouse",
+  id: "harborline-coffee",
+  name: "Harborline Coffee",
   currency: "USD",
   policy: {
     maxDiscountPct: 10,
@@ -35,7 +35,7 @@ export const LOCATIONS: Location[] = [
     longitude: -122.4011,
     openingHours: { open: 10, close: 20 },
     hourlyCapacityOrders: 55,
-    profile: "Office district: strong weekday lunch, quiet mid-afternoon.",
+    profile: "Office district: strong weekday coffee rush, quiet mid-afternoon.",
   },
   {
     id: "arena",
@@ -46,7 +46,7 @@ export const LOCATIONS: Location[] = [
     longitude: -122.3877,
     openingHours: { open: 11, close: 22 },
     hourlyCapacityOrders: 40,
-    profile: "Next to the arena: demand concentrates before events; small kitchen.",
+    profile: "Near the arena: demand concentrates before events; small espresso bar.",
   },
   {
     id: "residential",
@@ -57,7 +57,7 @@ export const LOCATIONS: Location[] = [
     longitude: -122.4148,
     openingHours: { open: 11, close: 21 },
     hourlyCapacityOrders: 32,
-    profile: "Neighborhood store: steady evenings, family orders on weekends.",
+    profile: "Neighborhood café: steady mornings and weekend breakfast orders.",
   },
 ];
 
@@ -68,39 +68,37 @@ export const LOCATIONS: Location[] = [
  */
 export const SF_COMPETITOR_PROFILES: Record<string, CompetitorProfile[]> = {
   downtown: [
-    { id: "sweetgreen-soma", name: "sweetgreen SoMa", officialDomains: ["sweetgreen.com"], locationAliases: ["171 2nd St, San Francisco, CA 94105", "SoMa"] },
-    { id: "mixt-one-market", name: "MIXT One Market", officialDomains: ["mixt.com"], locationAliases: ["70 Mission St, San Francisco, CA 94105", "FiDi"] },
-    { id: "proper-food-fidi", name: "Proper Food FiDi", officialDomains: ["properfood.com"], locationAliases: ["555 California St, San Francisco, CA 94104", "FiDi"] },
+    { id: "blue-bottle-downtown", name: "Blue Bottle Coffee", officialDomains: ["bluebottlecoffee.com"], locationAliases: ["Downtown San Francisco", "Financial District"] },
+    { id: "philz-downtown", name: "Philz Coffee", officialDomains: ["philzcoffee.com"], locationAliases: ["Downtown San Francisco", "Financial District"] },
   ],
   arena: [
-    { id: "sweetgreen-mission-rock", name: "sweetgreen Mission Rock", officialDomains: ["sweetgreen.com"], locationAliases: ["1023 3rd St, San Francisco, CA 94158", "Mission Bay"] },
-    { id: "proper-food-mission-bay", name: "Proper Food Mission Bay", officialDomains: ["properfood.com"], locationAliases: ["588 Mission Bay Blvd N, San Francisco, CA 94158", "Mission Bay"] },
-    { id: "souvla-dogpatch", name: "Souvla Dogpatch", officialDomains: ["souvla.com"], locationAliases: ["2505 3rd St, San Francisco, CA 94107", "Dogpatch"] },
+    { id: "blue-bottle-mission-bay", name: "Blue Bottle Coffee", officialDomains: ["bluebottlecoffee.com"], locationAliases: ["Mission Bay", "Chase Center"] },
+    { id: "sightglass-mission-bay", name: "Sightglass Coffee", officialDomains: ["sightglasscoffee.com"], locationAliases: ["Mission Bay", "Dogpatch"] },
   ],
   residential: [
-    { id: "mixt-valencia", name: "MIXT Mission / Valencia", officialDomains: ["mixt.com"], locationAliases: ["901 Valencia St, San Francisco, CA 94110", "Mission District"] },
-    { id: "souvla-mission", name: "Souvla The Mission", officialDomains: ["souvla.com"], locationAliases: ["758 Valencia St, San Francisco, CA 94110", "Mission District"] },
+    { id: "ritual-mission", name: "Ritual Coffee Roasters", officialDomains: ["ritualcoffee.com"], locationAliases: ["Mission District", "Valencia Street"] },
+    { id: "four-barrel-mission", name: "Four Barrel Coffee", officialDomains: ["fourbarrelcoffee.com"], locationAliases: ["Mission District", "Valencia Street"] },
   ],
 };
 
 const ALL = LOCATIONS.map((location) => location.id);
 
 export const MENU: MenuItem[] = [
-  { id: "signature-bowl", name: "Signature Bowl", category: "bowl", regularPriceCents: 1400, variableCostCents: 500, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
-  { id: "miso-salmon-bowl", name: "Miso Salmon Bowl", category: "bowl", regularPriceCents: 1600, variableCostCents: 650, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
-  { id: "crispy-chicken-bowl", name: "Crispy Chicken Bowl", category: "bowl", regularPriceCents: 1450, variableCostCents: 575, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
+  { id: "coffee-pastry-pair", name: "Coffee & Pastry Pair", category: "bundle", offerEligible: true, regularPriceCents: 1400, variableCostCents: 500, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
+  { id: "iced-latte", name: "Iced Latte", category: "coffee", offerEligible: true, regularPriceCents: 650, variableCostCents: 230, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
+  { id: "drip-coffee", name: "Drip Coffee", category: "coffee", offerEligible: false, regularPriceCents: 400, variableCostCents: 100, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ALL },
   // Deliberately stale cost so the guardrail is demonstrable.
-  { id: "tofu-greens-bowl", name: "Tofu Greens Bowl", category: "bowl", regularPriceCents: 1200, variableCostCents: 425, costUpdatedAt: "2026-06-01T09:00:00-07:00", eligibleLocationIds: ALL },
-  { id: "family-bowl-kit", name: "Family Bowl Kit", category: "bundle", regularPriceCents: 4200, variableCostCents: 1700, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ["residential"] },
+  { id: "oat-milk-latte", name: "Oat Milk Latte", category: "coffee", offerEligible: true, regularPriceCents: 700, variableCostCents: 280, costUpdatedAt: "2026-06-01T09:00:00-07:00", eligibleLocationIds: ALL },
+  { id: "weekend-breakfast-set", name: "Weekend Breakfast Set", category: "food", offerEligible: true, regularPriceCents: 1500, variableCostCents: 600, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ["residential"] },
 ];
 
 /** Share of item units by item (before eligibility). Order → units uses UNITS_PER_ORDER. */
 export const ITEM_MIX: Record<string, number> = {
-  "signature-bowl": 0.36,
-  "crispy-chicken-bowl": 0.26,
-  "miso-salmon-bowl": 0.2,
-  "tofu-greens-bowl": 0.14,
-  "family-bowl-kit": 0.04,
+  "coffee-pastry-pair": 0.36,
+  "iced-latte": 0.27,
+  "drip-coffee": 0.2,
+  "oat-milk-latte": 0.13,
+  "weekend-breakfast-set": 0.04,
 };
 export const UNITS_PER_ORDER = 1.25;
 
@@ -122,7 +120,7 @@ export const HOURLY_ORDER_PROFILE: Record<string, { weekday: Record<number, numb
 
 /** One labeled past promotion so the baseline must exclude discounted hours. */
 export const HISTORICAL_PROMOTIONS = [
-  { locationId: "downtown", itemId: "signature-bowl", date: "2026-09-21", startHour: 14, endHour: 17, discountPct: 10, unitLift: 0.35 },
+  { locationId: "downtown", itemId: "coffee-pastry-pair", date: "2026-09-21", startHour: 14, endHour: 17, discountPct: 10, unitLift: 0.35 },
 ];
 
 export const CONTEXT_SIGNALS: ContextSignal[] = [
@@ -198,13 +196,13 @@ export const CONTEXT_SIGNALS: ContextSignal[] = [
 
 export const COMPETITOR_OFFERS: CompetitorOffer[] = [
   {
-    id: "comp-downtown-greenleaf-afternoon",
+    id: "comp-downtown-market-cup-afternoon",
     locationId: "downtown",
-    competitorName: "Greenleaf Bowls (fictional)",
-    itemDescription: "Afternoon grain bowl special",
-    priceCents: 1150,
-    portion: "Regular bowl, smaller protein portion",
-    inclusions: "Bowl only",
+    competitorName: "Market Cup Coffee (fictional)",
+    itemDescription: "Afternoon coffee and pastry pair",
+    priceCents: 1200,
+    portion: "12 oz coffee and pastry",
+    inclusions: "Coffee and one pastry",
     channel: "in-store",
     terms: "Weekdays 2–5 p.m.",
     availability: "Mon–Fri 14:00–17:00",
@@ -213,16 +211,16 @@ export const COMPETITOR_OFFERS: CompetitorOffer[] = [
     sourceUrl: null,
     collectedAt: "2026-09-28T16:00:00-07:00",
     comparability: "comparable",
-    comparabilityNotes: "Similar bowl and channel; protein portion is smaller than our Signature Bowl.",
+    comparabilityNotes: "Similar coffee-and-pastry bundle and in-store channel; size may differ from our Coffee & Pastry Pair.",
   },
   {
-    id: "comp-arena-stadium-grill-combo",
+    id: "comp-arena-stadium-espresso-combo",
     locationId: "arena",
-    competitorName: "Stadium Grill (fictional)",
-    itemDescription: "Pre-game burger combo",
-    priceCents: 1600,
-    portion: "Burger, fries",
-    inclusions: "Includes a drink",
+    competitorName: "Stadium Espresso (fictional)",
+    itemDescription: "Pre-event espresso and snack combo",
+    priceCents: 1100,
+    portion: "Double espresso and snack",
+    inclusions: "Includes a snack",
     channel: "in-store",
     terms: "Event days only",
     availability: "Event days from 16:00",
@@ -231,15 +229,15 @@ export const COMPETITOR_OFFERS: CompetitorOffer[] = [
     sourceUrl: null,
     collectedAt: "2026-09-30T12:00:00-07:00",
     comparability: "noncomparable",
-    comparabilityNotes: "Different category and includes a drink; not a like-for-like bowl price.",
+    comparabilityNotes: "Different service format and event window; not a like-for-like coffee offer.",
   },
   {
-    id: "comp-residential-familyco-meal",
+    id: "comp-residential-neighborhood-breakfast-set",
     locationId: "residential",
-    competitorName: "FamilyCo Kitchen (fictional)",
-    itemDescription: "Family meal for four",
-    priceCents: 3800,
-    portion: "Four mains, two sides",
+    competitorName: "Neighborhood Roasters (fictional)",
+    itemDescription: "Weekend coffee and breakfast set",
+    priceCents: 1400,
+    portion: "Two coffees and a pastry",
     inclusions: "Excludes delivery fee",
     channel: "online",
     terms: "Weekends, online orders",
@@ -249,6 +247,6 @@ export const COMPETITOR_OFFERS: CompetitorOffer[] = [
     sourceUrl: null,
     collectedAt: "2026-09-27T18:00:00-07:00",
     comparability: "comparable",
-    comparabilityNotes: "Comparable to our Family Bowl Kit, but online price excludes a delivery fee.",
+    comparabilityNotes: "Comparable to our Weekend Breakfast Set, but online price excludes a delivery fee.",
   },
 ];

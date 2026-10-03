@@ -1,5 +1,9 @@
 # Dynamic competitor discovery scope
 
+**Status: deferred stretch goal.** The coffee-shop demo uses named,
+manager-reviewable San Francisco seed profiles. Build the workflow below only
+after the core planning and approval journey remains stable.
+
 ## Goal
 
 Let a restaurant owner describe a location and either provide known competitors
@@ -16,7 +20,7 @@ The onboarding form collects the following per restaurant location:
 
 - Restaurant name and street address
 - City, state, postal code, and timezone
-- Cuisine/category and service model (for example, fast-casual bowl counter)
+- Cuisine/category and service model (for example, neighborhood coffee bar)
 - Optional price range and service channels
 - Comparison definition: item/category, channel, distance radius, and relevant
   time window

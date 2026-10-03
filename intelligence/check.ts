@@ -24,13 +24,13 @@ const packet: ContentPacket = {
 const draft = await generateSocialDraft(packet);
 assert.equal(draft.revision, 2);
 assert.equal(draft.source, "template");
-assert.ok(draft.caption.includes("$12.60") && draft.caption.includes("Signature Bowl") && draft.caption.includes("Downtown"));
+assert.ok(draft.caption.includes("$12.60") && draft.caption.includes("Coffee & Pastry Pair") && draft.caption.includes("Downtown"));
 assert.deepEqual(validateGeneratedContent(packet, { text: draft.caption }), []);
 
 // Unsupported model numbers or evidence fall back to the template.
 const lyingModel: ContentModel = {
   explain: async () => ({ summary: "Sales will rise 40% to $9.99.", evidenceIds: ["made-up"], assumptions: [], risks: [] }),
-  draftSocial: async () => ({ caption: "Bowls $9.99 today!", creativeBrief: "" }),
+  draftSocial: async () => ({ caption: "Coffee $9.99 today!", creativeBrief: "" }),
 };
 assert.equal((await generateExplanation(packet, lyingModel)).source, "template");
 assert.equal((await generateSocialDraft(packet, lyingModel)).source, "template");
@@ -42,7 +42,7 @@ assert.ok(explanation.evidenceIds.every((id) => packet.contextSignals.some((s) =
 // Tavily boundary: no transport → unavailable, never blocking.
 const run = await startCompetitorResearch({ locationId: "downtown", locationName: "Downtown, San Francisco", planningDate: date, competitors: SF_COMPETITOR_PROFILES.downtown.slice(0, 1) }, undefined);
 assert.equal(run.status, "unavailable");
-const evidence = normalizeRetrievedSource(run, "sweetgreen-soma", { url: "https://example.com/menu", title: "Menu", retrievedAt: "2026-10-03T12:00:00Z", claimText: "Afternoon bowls" });
+const evidence = normalizeRetrievedSource(run, "blue-bottle-downtown", { url: "https://example.com/menu", title: "Menu", retrievedAt: "2026-10-03T12:00:00Z", claimText: "Afternoon coffee" });
 assert.equal(evidence.observationStatus, "needs_review");
 assert.equal(evidence.priceCents, null);
 
@@ -52,7 +52,7 @@ const transport = createTavilySearchTransport({
   now: () => new Date("2026-10-03T12:00:00Z"),
   fetchImplementation: async () => new Response(JSON.stringify({
     request_id: "tavily-check",
-    results: [{ url: "https://www.sweetgreen.com/menu", title: "Official menu", content: "A source-backed menu snippet", published_date: "2026-10-01T00:00:00Z" }],
+    results: [{ url: "https://bluebottlecoffee.com/menu", title: "Official menu", content: "A source-backed menu snippet", published_date: "2026-10-01T00:00:00Z" }],
   }), { status: 200 }),
 });
 const batch = await searchCompetitorOffers(
@@ -61,7 +61,7 @@ const batch = await searchCompetitorOffers(
   new Date("2026-10-03T12:00:00Z"),
 );
 assert.equal(batch.results[0].run.status, "completed");
-assert.equal(batch.results[0].evidence[0].sourceUrl, "https://www.sweetgreen.com/menu");
+assert.equal(batch.results[0].evidence[0].sourceUrl, "https://bluebottlecoffee.com/menu");
 assert.equal(batch.results[0].evidence[0].priceCents, null);
 
 console.log("✓ intelligence checks passed");

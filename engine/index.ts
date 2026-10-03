@@ -329,7 +329,7 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
 /** Default item for a window: the eligible single item with the most expected units. */
 function defaultItemId(data: PlanningData, outlook: LocationOutlook): string {
   const { startHour, endHour } = outlook.focusWindow;
-  const eligible = data.menu.filter((item) => item.category === "bowl" && item.eligibleLocationIds.includes(outlook.locationId));
+  const eligible = data.menu.filter((item) => item.offerEligible && item.eligibleLocationIds.includes(outlook.locationId));
   const unitsFor = (itemId: string) =>
     sum(outlook.items.find((entry) => entry.itemId === itemId)?.hours.filter((hour) => hour.hour >= startHour && hour.hour < endHour).map((hour) => hour.scenarioUnits) ?? []);
   return eligible.reduce((best, item) => (unitsFor(item.id) > unitsFor(best.id) ? item : best)).id;

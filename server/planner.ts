@@ -356,11 +356,11 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
     async createStrategyRun(body: Partial<CreateStrategyRunRequest>): Promise<StrategyRunResponse> {
       const date = parseDate(body.date);
       const scenario = parseScenario(body.scenario);
-      if (typeof body.locationId !== "string") fail(400, "BAD_REQUEST", "locationId is required");
+      const locationId = typeof body.locationId === "string" ? body.locationId : fail(400, "BAD_REQUEST", "locationId is required");
       const horizonDays = parseHorizonDays(body.horizonDays);
       // Verifies the location through the same data boundary as recommendations.
-      compute(date, scenario, body.locationId);
-      const id = `strategy-${body.locationId}-${date}-${scenario}-${horizonDays}`;
+      compute(date, scenario, locationId);
+      const id = `strategy-${locationId}-${date}-${scenario}-${horizonDays}`;
       const existing = store.read().strategyRuns[id];
       if (existing) return { contractVersion: CONTRACT_VERSION, strategyRun: existing };
 
@@ -368,7 +368,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
       const initial: StrategyRun = {
         id,
         revision: 1,
-        locationId: body.locationId,
+        locationId,
         planningDate: date,
         scenario,
         horizonDays,
@@ -388,7 +388,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
         state.strategyRuns[id] = initial;
       });
 
-      const recommendation = createRecommendationDraft({ date, scenario, locationId: body.locationId });
+      const recommendation = createRecommendationDraft({ date, scenario, locationId });
       let evidence: TrendEvidence[] = [];
       let zooWorkRunId: string | undefined;
       let bandRoomId: string | undefined;
@@ -396,7 +396,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
 
       if (strategyWorkflow) {
         try {
-          const result = await strategyWorkflow.run({ strategyRunId: id, locationId: body.locationId, planningDate: date, scenario, horizonDays });
+          const result = await strategyWorkflow.run({ strategyRunId: id, locationId, planningDate: date, scenario, horizonDays });
           zooWorkRunId = result.zooWorkRunId;
           bandRoomId = result.bandRoomId;
           evidence = result.evidence.filter(
@@ -415,7 +415,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
 
       const completedAt = now().toISOString();
       const state = store.write((draft) => {
-        const run = draft.strategyRuns[id];
+        const run = draft.strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`);
         run.status = "awaiting_approval";
         run.zooWorkRunId = zooWorkRunId;
         run.bandRoomId = bandRoomId;
@@ -427,7 +427,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
         );
         run.updatedAt = completedAt;
       });
-      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] };
+      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`) };
     },
 
     getStrategyRun(id: string): StrategyRunResponse {
@@ -443,8 +443,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
         fail(409, "STALE_REVISION", `Strategy run is at revision ${run.revision}, not ${expectedRevision}. Reload and retry.`, { retryable: true });
       }
       if (typeof body.actionId !== "string") fail(400, "BAD_REQUEST", "actionId is required");
-      const action = run.rankedActions.find((entry) => entry.id === body.actionId);
-      if (!action) fail(400, "BAD_REQUEST", "actionId is not part of this strategy run");
+      const action = run.rankedActions.find((entry) => entry.id === body.actionId) ?? fail(400, "BAD_REQUEST", "actionId is not part of this strategy run");
       if (run.status === "approved") {
         if (run.approvedActionId === action.id) return { contractVersion: CONTRACT_VERSION, strategyRun: run };
         fail(409, "STALE_REVISION", "A different action has already been approved for this strategy run.", { retryable: true });
@@ -461,13 +460,13 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
 
       const approvedAt = now().toISOString();
       const state = store.write((draft) => {
-        const current = draft.strategyRuns[id];
+        const current = draft.strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`);
         current.status = "approved";
         current.approvedActionId = action.id;
         current.events.push(strategyEvent(id, current.events.length + 1, "approved", `Manager approved: ${action.title}.`, approvedAt));
         current.updatedAt = approvedAt;
       });
-      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] };
+      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`) };
     },
 
     getRecommendation,

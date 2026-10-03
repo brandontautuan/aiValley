@@ -52,7 +52,7 @@ export function App() {
         <div className="brand">
           <span className="logo" aria-hidden>◐</span>
           <div>
-            <strong>Bowlhouse</strong>
+            <strong>Harborline Coffee</strong>
             <span className="muted"> Revenue Planner</span>
           </div>
         </div>

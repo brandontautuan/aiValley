@@ -118,13 +118,13 @@ function templateSocial(packet: ContentPacket): Pick<SocialDraft, "caption" | "c
   const day = weekdayName(selected.terms.window.date);
   if (selected.kind === "no-change") {
     return {
-      caption: `${selected.itemName} at Bowlhouse ${location.name}, ${day}. Open ${formatHour(location.openingHours.open)}–${formatHour(location.openingHours.close)} — come early, it gets busy. 🥗`,
-      creativeBrief: `Regular-price awareness post (no offer). Show the ${selected.itemName} on the counter at ${location.name}. Mention opening hours; do not mention a discount.`,
+      caption: `${selected.itemName} at Harborline Coffee ${location.name}, ${day}. Open ${formatHour(location.openingHours.open)}–${formatHour(location.openingHours.close)} — stop in when you’re nearby. ☕`,
+      creativeBrief: `Regular-price awareness post (no offer). Show the ${selected.itemName} at the bar in ${location.name}. Mention opening hours; do not mention a discount.`,
     };
   }
   return {
-    caption: `${day} special: ${selected.itemName} for ${dollars(selected.proposedPriceCents)} (regularly ${dollars(selected.regularPriceCents)}) at Bowlhouse ${location.name}, ${windowText(packet)} only. In-store while it lasts. 🥗`,
-    creativeBrief: `Single overhead photo of the ${selected.itemName} in natural light. Overlay: "${selected.terms.discountPct}% off ${windowText(packet)}" and "${location.name} only". Avoid competitor names, scarcity claims or any figure not in the caption.`,
+    caption: `${day} special: ${selected.itemName} for ${dollars(selected.proposedPriceCents)} (regularly ${dollars(selected.regularPriceCents)}) at Harborline Coffee ${location.name}, ${windowText(packet)} only. In-store. ☕`,
+    creativeBrief: `Warm café photo of the ${selected.itemName} in natural light. Overlay: "${selected.terms.discountPct}% off ${windowText(packet)}" and "${location.name} only". Avoid competitor names, scarcity claims or any figure not in the caption.`,
   };
 }
 

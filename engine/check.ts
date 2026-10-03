@@ -30,7 +30,7 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   const selection = selectRecommendedCandidate(candidates, outlook);
   const selected = candidates.find((candidate) => candidate.id === selection.selectedCandidateId)!;
   assert.equal(selected.kind, "discount");
-  assert.equal(selected.itemName, "Signature Bowl");
+  assert.equal(selected.itemName, "Coffee & Pastry Pair");
 }
 
 // Arena: event changes only arena event hours, and leads to keep-price.
@@ -56,18 +56,18 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
 // Guardrails.
 {
   const { data, outlook } = outlookFor("downtown", "typical");
-  const terms = (overrides: Partial<OfferTerms>): OfferTerms => ({ locationId: "downtown", itemId: "signature-bowl", window: { date, startHour: 14, endHour: 17 }, discountPct: 10, ...overrides });
+  const terms = (overrides: Partial<OfferTerms>): OfferTerms => ({ locationId: "downtown", itemId: "coffee-pastry-pair", window: { date, startHour: 14, endHour: 17 }, discountPct: 10, ...overrides });
   const issuesFor = (overrides: Partial<OfferTerms>, existing: OfferTerms[] = []) => evaluateOffers(data, outlook, terms(overrides), existing)[1].issues.map((issue) => issue.code);
 
   assert.ok(issuesFor({ discountPct: 15 }).includes("DISCOUNT_ABOVE_CEILING"));
   assert.ok(issuesFor({ window: { date, startHour: 19, endHour: 22 } }).includes("CLOSED_HOURS"));
   assert.ok(issuesFor({ window: { date, startHour: 16, endHour: 14 } }).includes("INVALID_WINDOW"));
-  assert.ok(issuesFor({ itemId: "tofu-greens-bowl" }).includes("STALE_COST"));
-  assert.ok(issuesFor({ itemId: "family-bowl-kit" }).includes("ITEM_NOT_ELIGIBLE"));
+  assert.ok(issuesFor({ itemId: "oat-milk-latte" }).includes("STALE_COST"));
+  assert.ok(issuesFor({ itemId: "weekend-breakfast-set" }).includes("ITEM_NOT_ELIGIBLE"));
   assert.ok(issuesFor({}, [terms({ window: { date, startHour: 16, endHour: 18 } })]).includes("OVERLAPPING_OFFER"));
   assert.deepEqual(issuesFor({}), []);
 
-  const missingCost = { ...data, menu: data.menu.map((item) => (item.id === "signature-bowl" ? { ...item, variableCostCents: null } : item)) };
+  const missingCost = { ...data, menu: data.menu.map((item) => (item.id === "coffee-pastry-pair" ? { ...item, variableCostCents: null } : item)) };
   assert.ok(evaluateOffers(missingCost, outlook, terms({}))[1].issues.some((issue) => issue.code === "MISSING_COST"));
   const thinMargin = { ...data, chain: { ...data.chain, policy: { ...data.chain.policy, maxDiscountPct: 80 } } };
   assert.ok(evaluateOffers(thinMargin, outlook, terms({ discountPct: 70 }))[1].issues.some((issue) => issue.code === "NONPOSITIVE_CONTRIBUTION"));

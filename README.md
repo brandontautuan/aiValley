@@ -1,6 +1,6 @@
-# Bowlhouse Revenue Planner
+# Harborline Coffee Revenue Planner
 
-An AI-assisted daily revenue planner for a small restaurant chain. It answers one question: **what should each location do tomorrow, and why?**
+An AI-assisted daily revenue planner for a small coffee-shop chain. It answers one question: **what should each location do tomorrow, and why?**
 
 Historical orders and local signals → demand outlook → offer comparison → explanation and social draft → manager review → saved action plan.
 
