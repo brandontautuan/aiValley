@@ -9,6 +9,9 @@
   existing recommendation path.
 - `server/ARCHITECTURE.md`: role ownership, data flow, API surface, revision
   semantics, strategy workflow, and verification guide for future agents.
+- Dates before 2026-08-11, which have no usable fixture history, return
+  `422 NO_HISTORICAL_DATA` rather than
+  creating a zero-demand recommendation.
 
 ## Contract version
 1.

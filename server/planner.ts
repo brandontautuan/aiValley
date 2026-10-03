@@ -47,6 +47,12 @@ const fail = (status: number, code: ApiError["code"], message: string, extra: Pa
 
 const SCENARIO_IDS: ScenarioId[] = ["typical", "local-event"];
 
+function requireHistoricalData(observationCount: number): void {
+  if (observationCount === 0) {
+    fail(422, "NO_HISTORICAL_DATA", "This demo has no historical sales for that planning date. Choose August 11, 2026 or a later date.");
+  }
+}
+
 function parseDate(value: unknown): string {
   const date = value ?? DEFAULT_PLANNING_DATE;
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) fail(400, "BAD_REQUEST", "date must be YYYY-MM-DD");
@@ -122,6 +128,7 @@ export function createPlanner({ store, model, strategyWorkflow, tavilySearchTran
     const location = data.locations.find((entry) => entry.id === locationId);
     if (!location) return fail(404, "NOT_FOUND", `Unknown location ${locationId}`);
     const outlook = calculateLocationOutlook(data, { date, scenario, locationId });
+    requireHistoricalData(outlook.observationCount);
     return { data, location, outlook };
   }
 
@@ -360,6 +367,7 @@ export function createPlanner({ store, model, strategyWorkflow, tavilySearchTran
       const data = loadPlanningData({ date, scenario });
       const locations: LocationSummary[] = data.locations.map((location) => {
         const outlook = calculateLocationOutlook(data, { date, scenario, locationId: location.id });
+        requireHistoricalData(outlook.observationCount);
         const candidates = evaluateOffers(data, outlook);
         const selection = selectRecommendedCandidate(candidates, outlook);
         const selected = candidates.find((candidate) => candidate.id === selection.selectedCandidateId)!;

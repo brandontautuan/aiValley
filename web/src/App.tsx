@@ -14,6 +14,9 @@ import { mockSeedOf, scenarioLabel } from "./format.ts";
 import { hrefFor, parseHash, routePath, type Route } from "./nav.ts";
 
 const DEFAULT_DATE = "2026-10-05";
+// The first fixture observation is August 10; forecasts need prior history.
+// The API still rejects unsupported dates from manually edited links or direct requests.
+const EARLIEST_DEMO_DATE = "2026-08-11";
 
 const TABS: Array<{ path: string; label: string; active: (route: Route) => boolean }> = [
   { path: "/", label: "Daily planning", active: (route) => route.page === "today" || route.page === "location" },
@@ -102,7 +105,7 @@ export function App() {
         <div className="controls">
           <label className="date-control">
             <span>Planning date</span>
-            <input type="date" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} />
+            <input type="date" min={EARLIEST_DEMO_DATE} value={date} onChange={(event) => event.target.value && setDate(event.target.value)} />
           </label>
         </div>
       </header>

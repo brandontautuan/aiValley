@@ -2,6 +2,8 @@
 
 ## Ready interfaces and paths
 - `web/src/App.tsx`: Daily planning and Saved plans are primary navigation. Week, Month, and Strategy remain under More views. One planning-date control; scenario and reset controls are under Demo settings. Date/scenario/location changes remount review state to prevent mixing contexts.
+- The date control begins after the first fixed-fixture observation (2026-08-11);
+  direct links remain protected by API validation.
 - `web/src/components/Today.tsx`: action-first store cards, a short reason, optional demand details, and one saved-store count. Saved cards display the persisted terms and link to their saved scenario, even when another scenario is being explored.
 - `web/src/components/LocationDetail.tsx`: selected terms, reason, customer price, amount left after item costs, and discount sales target appear first. Forecast/evidence, comparisons/custom edits, social drafts, and competitor research are collapsed and explain their purpose. Assumptions and selected-offer warnings remain visible.
 - `TermsEditor.tsx` / `DecisionBar.tsx`: unapplied edits block approval and dismissal, with Update/Discard controls. End time must follow start time. Approval explicitly saves a plan without changing menus or publishing posts.

@@ -510,6 +510,7 @@ export interface ApiError {
   code:
     | "NOT_FOUND"
     | "BAD_REQUEST"
+    | "NO_HISTORICAL_DATA"
     | "STALE_REVISION"
     | "VALIDATION_FAILED"
     | "WORKFLOW_FAILED"

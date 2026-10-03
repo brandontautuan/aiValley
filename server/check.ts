@@ -40,6 +40,10 @@ try {
     assert.equal(outlook.outlook.hours.length, 10);
     assert.equal((await call("GET", "/api/locations/nowhere/outlook")).status, 404);
     assert.equal((await call("GET", "/api/overview?scenario=bogus")).status, 400);
+    const unavailableHistory = await call<{ code: string }>("GET", "/api/overview?date=2026-07-02&scenario=typical");
+    assert.equal(unavailableHistory.status, 422);
+    assert.equal(unavailableHistory.json.code, "NO_HISTORICAL_DATA");
+    assert.equal((await call<{ code: string }>("GET", "/api/overview?date=2026-08-10&scenario=typical")).json.code, "NO_HISTORICAL_DATA");
 
     const unavailableResearch = await call<{ results: Array<{ run: { status: string } }> }>("POST", "/api/locations/downtown/competitor-research", { date });
     assert.equal(unavailableResearch.status, 200);
