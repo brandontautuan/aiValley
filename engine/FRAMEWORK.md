@@ -26,7 +26,7 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Keep it, and state it in `ENGINE_ASSUMPTIONS`. | C6 |
 | Distinguish raw vs serviceable units; compare scenarios consistently | ⚠️ units not capped; serviceable units never enter contribution or break-even | C2 |
 | Report missing costs **and substitution/cannibalization limitations** | ⚠️ missing cost flagged only on discount candidates (keep-price with unknown cost carries no issue); cannibalization not reported | C6 |
-| Demand response is explicit low/base/high assumption, no learned elasticity | ✅ labeled, but low scenario still assumes lift | C1 |
+| Demand response is explicit low/base/high assumption, no learned elasticity | ✅ low +0%, base 1.5×, high 3× the discount % (C1 done) | — |
 | Cautious trial/no-change when response evidence is missing | ✅ keep-price; trial optional | C4 |
 | Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ (no customer-level inputs exist) | — |
 | Overlap check includes **channel** | ⚠️ ignored, because `OfferTerms` has no channel field | request to B (optional) |
@@ -94,7 +94,7 @@ Changing any export's shape needs Role B's agreement first, since B, A and D all
 - The default item is the eligible **bowl** with the most expected units in the focus window.
 - Candidates are no-change, 5% off and 10% off. If edited terms are passed, they're no-change (same item and window) plus those terms; edited terms at 0% give no-change only.
 - Reference units are the scenario units in the window at the regular price, not capped at capacity.
-- Response scenarios: `units = ref × (1 + multiplier × pct/100)` with multipliers low 1, base 3, high 5. Only discount candidates with a known cost get them.
+- Response scenarios: `units = ref × (1 + multiplier × pct/100)` with multipliers low 0, base 1.5, high 3 (10% off → +0 / +15 / +30%). Only discount candidates with a known cost get them.
 
 ### Guardrails (`ValidationIssue.code`)
 `DISCOUNT_ABOVE_CEILING`, `INVALID_DISCOUNT`, `NONPOSITIVE_CONTRIBUTION`, `BELOW_MIN_CONTRIBUTION`, `MISSING_COST`, `STALE_COST`, `CLOSED_HOURS`, `INVALID_WINDOW`, `ITEM_NOT_ELIGIBLE`, `OVERLAPPING_OFFER` (all errors). `CAPACITY_CONFLICT` and `SPARSE_HISTORY` are warnings.
@@ -109,7 +109,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ### Verified (`engine/check.ts`)
 - $14 example via `discountedPriceCents`/`breakEvenUnits` (the $180 and $197.60 figures are plain arithmetic, see C7), and the nonpositive contribution guard
-- Downtown gets a discount trial on Signature Bowl, 14:00–17:00 (the engine picks 10%; the check asserts only that it is a discount)
+- Downtown's soft window is 14:00–17:00 on Signature Bowl, but since C1 neither 5% nor 10% reaches break-even in the base scenario, so Downtown keeps price. The check asserts the exact response values and that outcome.
 - The Arena event changes only Arena 16:00–20:00 and isn't double-counted; Arena keeps price, and its discounts are flagged with `CAPACITY_CONFLICT`
 - Every guardrail code except `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning, which no check asserts
 - Sparse fallback: `evidenceQuality` is sparse, baselines stay positive, selection keeps price
@@ -118,9 +118,12 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ## 4. Work queue
 
-Order: **C1 → C2 → C6 → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
+Order: **C1 (done) → C2 → C6 → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
 
-### C1. Make the response assumptions conservative (engine-only)
+### C1. Make the response assumptions conservative (engine-only) — DONE
+Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every fixture item is at 35% or more. `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
+
+Original brief:
 Today, 10% off assumes +10/+30/+50%. Even "low" assumes a lift, and base +30% makes discounts easy to justify.
 - Change to explicit per-scenario values. Low is **+0%** (nobody responds). Base and high scale with the discount, e.g. base 1.5×, high 3× → for 10% off: +0 / +15 / +30%.
 - Update the `ENGINE_ASSUMPTIONS` wording to match.

@@ -22,16 +22,19 @@ const ADJUSTMENT_BOUNDS = { min: -0.5, max: 1.0 };
 const FOCUS_WINDOW_HOURS = 3;
 const SOFT_WINDOW_SHARE = 0.6;
 const CLASSIFICATION_THRESHOLD = 0.1;
-/** Assumed unit change per 1% discount (low/base/high). An explicit assumption, not elasticity. */
-const RESPONSE_MULTIPLIERS: Array<[ResponseScenario["label"], number]> = [
-  ["low", 1],
-  ["base", 3],
-  ["high", 5],
-];
+/**
+ * Assumed unit change per 1% discount (low/base/high). An explicit assumption, not elasticity.
+ * Low means no response: nobody buys more because of the offer.
+ */
+const RESPONSE_PER_DISCOUNT_PCT: Record<ResponseScenario["label"], number> = { low: 0, base: 1.5, high: 3 };
+const RESPONSE_LABELS: Array<ResponseScenario["label"]> = ["low", "base", "high"];
+
+/** Assumed unit change vs. regular price for a scenario, e.g. 0.15 = +15%. */
+const assumedUnitChange = (label: ResponseScenario["label"], discountPct: number) => (RESPONSE_PER_DISCOUNT_PCT[label] * discountPct) / 100;
 
 export const ENGINE_ASSUMPTIONS = [
   "Context adjustments are fixture assumptions, not calibrated effects.",
-  "Discount response (low/base/high) is assumed at 1×/3×/5× the discount percentage; it is not learned from traffic.",
+  "Discount response is an assumption, not elasticity learned from traffic: low = +0% units (no response), base = 1.5× the discount percentage, high = 3× (10% off → +0% / +15% / +30%).",
   "Contribution is before fixed costs; it is not total restaurant profit.",
   "Item mix is assumed unchanged by context adjustments.",
 ];
@@ -285,7 +288,7 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
     if (existingOffers.some((offer) => offer.locationId === terms.locationId && offer.itemId === terms.itemId && windowsOverlap(offer.window, window))) {
       issues.push({ code: "OVERLAPPING_OFFER", severity: "error", field: "window", message: "Another approved offer covers this item, store and time." });
     }
-    const highChange = (RESPONSE_MULTIPLIERS.at(-1)![1] * terms.discountPct) / 100;
+    const highChange = assumedUnitChange("high", terms.discountPct);
     if (windowHours.some((hour) => hour.scenarioOrders * (1 + highChange) >= hour.capacityOrders * policy.capacityWarningShare)) {
       issues.push({ code: "CAPACITY_CONFLICT", severity: "warning", field: "window", message: "Projected demand plus the offer's assumed response could exceed kitchen capacity." });
     }
@@ -298,10 +301,10 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
   const referenceContributionCents = variableCostCents === null ? null : Math.round(referenceUnits * (regularPriceCents - variableCostCents));
   const responseScenarios: ResponseScenario[] =
     kind === "discount" && contributionPerUnitCents !== null
-      ? RESPONSE_MULTIPLIERS.map(([label, multiplier]) => {
-          const assumedUnitChange = (multiplier * terms.discountPct) / 100;
-          const units = round1(referenceUnits * (1 + assumedUnitChange));
-          return { label, assumedUnitChange, units, contributionCents: Math.round(units * contributionPerUnitCents) };
+      ? RESPONSE_LABELS.map((label) => {
+          const change = assumedUnitChange(label, terms.discountPct);
+          const units = round1(referenceUnits * (1 + change));
+          return { label, assumedUnitChange: change, units, contributionCents: Math.round(units * contributionPerUnitCents) };
         })
       : [];
 
