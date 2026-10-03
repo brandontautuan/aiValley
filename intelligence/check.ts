@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { loadPlanningData } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers } from "../engine/index.ts";
-import { BRAND_TONE, generateExplanation, generateSocialDraft, normalizeRetrievedSource, startCompetitorResearch, validateGeneratedContent, type ContentModel, type ContentPacket } from "./index.ts";
+import { BRAND_TONE, createTavilySearchTransport, generateExplanation, generateSocialDraft, normalizeRetrievedSource, searchCompetitorOffers, startCompetitorResearch, validateGeneratedContent, type ContentModel, type ContentPacket } from "./index.ts";
 
 const date = "2026-10-05";
 const data = loadPlanningData({ date, scenario: "typical" });
@@ -45,5 +45,23 @@ assert.equal(run.status, "unavailable");
 const evidence = normalizeRetrievedSource(run, "greenleaf", { url: "https://example.com/menu", title: "Menu", retrievedAt: "2026-10-03T12:00:00Z", claimText: "Afternoon bowls" });
 assert.equal(evidence.observationStatus, "needs_review");
 assert.equal(evidence.priceCents, null);
+
+// A configured server-side transport produces attributable, review-only evidence.
+const transport = createTavilySearchTransport({
+  apiKey: "test-key",
+  now: () => new Date("2026-10-03T12:00:00Z"),
+  fetchImplementation: async () => new Response(JSON.stringify({
+    request_id: "tavily-check",
+    results: [{ url: "https://example.com/official-menu", title: "Official menu", content: "A source-backed menu snippet", published_date: "2026-10-01T00:00:00Z" }],
+  }), { status: 200 }),
+});
+const batch = await searchCompetitorOffers(
+  { locationId: "downtown", locationName: "Downtown", planningDate: date, competitors: [{ id: "greenleaf", name: "Greenleaf Bowls", locationAliases: ["Downtown"] }] },
+  transport,
+  new Date("2026-10-03T12:00:00Z"),
+);
+assert.equal(batch.results[0].run.status, "completed");
+assert.equal(batch.results[0].evidence[0].sourceUrl, "https://example.com/official-menu");
+assert.equal(batch.results[0].evidence[0].priceCents, null);
 
 console.log("✓ intelligence checks passed");

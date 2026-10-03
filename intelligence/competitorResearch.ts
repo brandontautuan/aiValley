@@ -46,6 +46,11 @@ export interface TavilyResearchTransport {
   start(request: TavilyResearchRequest): Promise<{ providerRunId: string }>;
 }
 
+/** Focused, synchronous retrieval used for a small manager-triggered refresh. */
+export interface TavilySearchTransport {
+  search(request: TavilyResearchRequest): Promise<{ providerRequestId: string; sources: RetrievedSource[] }>;
+}
+
 export interface ResearchRun {
   id: string;
   status: ResearchStatus;
@@ -88,6 +93,11 @@ export interface CompetitorResearchEvidence {
 export interface ResearchResult {
   run: ResearchRun;
   evidence: CompetitorResearchEvidence[];
+}
+
+/** One independently attributable refresh per configured competitor profile. */
+export interface CompetitorResearchBatch {
+  results: ResearchResult[];
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -212,6 +222,63 @@ export async function startCompetitorResearch(
       errorCode: "TAVILY_FAILED",
     };
   }
+}
+
+/**
+ * Executes a bounded focused search for each already-configured competitor. It
+ * never discovers competitors from a free-form user query. A provider source is
+ * evidence to review, not an offer fact: normalized price and terms remain null.
+ */
+export async function searchCompetitorOffers(
+  input: StartCompetitorResearchInput,
+  transport: TavilySearchTransport | undefined,
+  now: Date = new Date(),
+): Promise<CompetitorResearchBatch> {
+  assertInput(input);
+  const createdAt = now.toISOString();
+  const results = await Promise.all(input.competitors.map(async (competitor): Promise<ResearchResult> => {
+    const request = createTavilyResearchRequest({ ...input, competitors: [competitor] });
+    const runId = stableId("research", `${input.locationId}:${input.planningDate}:${competitor.id}`);
+    if (!transport) {
+      return {
+        run: {
+          id: runId,
+          status: "unavailable",
+          locationId: input.locationId,
+          planningDate: input.planningDate,
+          createdAt,
+          errorCode: "TAVILY_UNAVAILABLE",
+        },
+        evidence: [],
+      };
+    }
+
+    try {
+      const response = await transport.search(request);
+      const run: ResearchRun = {
+        id: runId,
+        status: "completed",
+        locationId: input.locationId,
+        planningDate: input.planningDate,
+        providerRunId: requireText(response.providerRequestId, "providerRequestId"),
+        createdAt,
+      };
+      return { run, evidence: response.sources.map((source) => normalizeRetrievedSource(run, competitor.id, source)) };
+    } catch {
+      return {
+        run: {
+          id: runId,
+          status: "failed",
+          locationId: input.locationId,
+          planningDate: input.planningDate,
+          createdAt,
+          errorCode: "TAVILY_FAILED",
+        },
+        evidence: [],
+      };
+    }
+  }));
+  return { results };
 }
 
 /**

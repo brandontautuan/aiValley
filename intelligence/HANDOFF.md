@@ -10,7 +10,8 @@
 - `intelligence/index.ts`:
   - `generateExplanation(packet, model?)` and `generateSocialDraft(packet, model?)` return template output, or validated model output when a `ContentModel` is supplied.
   - `validateGeneratedContent` rejects unknown evidence IDs and any price or percentage that is not in the packet.
-- `intelligence/competitorResearch.ts`: Tavily boundary (stretch goal), moved here from `src/campaigns`. It has no SDK and no environment access.
+- `intelligence/competitorResearch.ts`: bounded, per-configured-competitor research request, unavailable/failure behavior, and evidence normalization. `searchCompetitorOffers` produces only attributable `needs_review` evidence with null offer facts.
+- `intelligence/tavilySearchTransport.ts`: server-only native-fetch Tavily Search adapter. It accepts an injected API key, sends a bounded advanced search, and returns source URL/title/excerpt/timestamps. It returns `undefined` when no key is supplied.
 
 ## Contract version
 1.
@@ -22,8 +23,8 @@
 - Fixture determinism and no future data leaking into history.
 - Captions match the exact terms.
 - Unsupported model numbers or evidence fall back to the template, and so does a model failure.
-- Tavily returns `unavailable` without a transport.
+- Tavily returns `unavailable` without a transport; the deterministic transport test produces review-only evidence with no inferred price.
 
 ## Next
 - Implement a server-side `ContentModel`, e.g. a Claude call that reads `ANTHROPIC_API_KEY`. Hand it to B so it can be passed into `createPlanner`.
-- Implement a `TavilyResearchTransport` that reads `TAVILY_API_KEY`.
+- B needs to provide/freeze a contract for configured competitor profiles and a research response, then wire `searchCompetitorOffers(input, createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }))` into the current `POST /api/locations/:id/competitor-research` 501 stub. The server, not this module, reads the key.

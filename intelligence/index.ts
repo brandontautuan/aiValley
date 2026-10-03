@@ -1,6 +1,7 @@
 import type { CompetitorOffer, ContextSignal, Explanation, Location, LocationOutlook, OfferCandidate, SocialDraft } from "../contracts/index.ts";
 
 export * from "./competitorResearch.ts";
+export * from "./tavilySearchTransport.ts";
 
 /**
  * Compact, structured input for explanations and social drafts. Everything the
