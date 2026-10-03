@@ -1,0 +1,10 @@
+{
+  "name": "restaurant-revenue-planner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/platform/server.ts",
+    "check": "node --experimental-strip-types src/platform/check.ts"
+  }
+}
