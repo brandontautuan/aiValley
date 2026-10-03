@@ -72,6 +72,9 @@ B calls `evaluateOffers` with edited terms on every edit and re-runs it before a
 | `discountedPriceCents(regular, pct)` | `Math.round(regular × (100 − pct) / 100)` | — |
 | `breakEvenUnits(ref, regular, proposed, cost)` | `ceil(ref × (regular − cost) / (proposed − cost))`, null if ≤ 0 | — |
 | `ENGINE_ASSUMPTIONS` | labels shown to the manager | `string[]` |
+| `selectionFacts(candidates, outlook)` | reason code + the numbers behind the selection | engine type `SelectionFacts` (not in contracts yet) |
+| `ENGINE_POLICY`, `DAYPARTS` | every tunable; the daypart table | — |
+| `BUNDLE_LIMITATION`, `candidateLimitations(data, candidate)` | bundle note and per-candidate helper | — |
 | `toLocalKey(iso, tz)` | local `YYYY-MM-DDTHH:mm` for window comparisons | — |
 
 Changing any export's shape needs Role B's agreement first, since B, A and D all depend on it.
@@ -120,7 +123,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ## 4. Work queue
 
-Order: **C1, C2, C6, C7, C4, C3 are done.** Only optional **C5** remains, and only if the team agrees.
+Order: **all work items (C1–C7) are done.** What remains are the optional contract requests to B in `HANDOFF.md`.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
 Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
@@ -157,7 +160,10 @@ Original brief:
 - The design suggests a *cautious trial* for low evidence instead of a flat keep-price. Option: allow only the smallest discount (5%) when evidence is sparse and the window is soft. Keep it off if the team prefers a stricter demo.
 - Move tunables (`ADJUSTMENT_BOUNDS`, `CLASSIFICATION_THRESHOLD`, `SOFT_WINDOW_SHARE`, response values) into one exported `ENGINE_POLICY` constant. The UI can then show them, and later B could move them into `ChainPolicy`.
 
-### C5. Structured reason for D (optional, beyond the design; only if the team agrees; needs Role B)
+### C5. Structured reason for D (optional, beyond the design; only if the team agrees; needs Role B) — DONE (engine side)
+Outcome: exported `selectionFacts(candidates, outlook)` returns the code and facts today with no contract change; the request to add them to `Selection` is in `HANDOFF.md`.
+
+Original brief:
 `Selection.reason` is free text. D has to explain it without inventing numbers.
 - **Ask B:** add `reasonCode` + `reasonFacts` (e.g. `{ breakEvenUnits, baseUnits, peakOrders, capacity }`) to `Selection`. Keep `reason` for display.
 - Codes: `CAPACITY_PEAK`, `SPARSE_HISTORY`, `DISCOUNT_CLEARS_BREAK_EVEN`, `NO_DISCOUNT_CLEARS_BREAK_EVEN`, `DEMAND_WITHIN_USUAL`.

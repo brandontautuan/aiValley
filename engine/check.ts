@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { OfferTerms, PlanningData } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
-import { breakEvenUnits, BUNDLE_LIMITATION, calculateLocationOutlook, candidateLimitations, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
+import { breakEvenUnits, BUNDLE_LIMITATION, calculateLocationOutlook, candidateLimitations, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectionFacts, selectRecommendedCandidate } from "./index.ts";
 
 const date = "2026-10-05";
 
@@ -320,6 +320,66 @@ for (const phrase of ["daypart", "cannibalization", "Break-even compares against
   const residential = outlookFor("residential", "typical");
   const breakfast = evaluateOffers(residential.data, residential.outlook, { locationId: "residential", itemId: "weekend-breakfast-set", window: { date, startHour: 13, endHour: 16 }, discountPct: 5 })[1];
   assert.ok(!breakfast.issues.some((issue) => issue.code === "ITEM_NOT_ELIGIBLE"));
+}
+
+// selectionFacts: the same decision as selectRecommendedCandidate, as a code plus the numbers behind it (C5).
+{
+  const factsFor = (locationId: string, scenario: "typical" | "local-event") => {
+    const { data, outlook } = outlookFor(locationId, scenario);
+    const candidates = evaluateOffers(data, outlook);
+    const facts = selectionFacts(candidates, outlook);
+    assert.equal(facts.selectedCandidateId, selectRecommendedCandidate(candidates, outlook).selectedCandidateId, "facts and selection agree");
+    return { facts, candidates, outlook };
+  };
+
+  // Downtown: soft window, but no discount clears. Facts describe the discount closest to break-even (5%).
+  const downtown = factsFor("downtown", "typical");
+  assert.equal(downtown.facts.reasonCode, "NO_DISCOUNT_CLEARS_BREAK_EVEN");
+  assert.equal(downtown.facts.comparedCandidateId, downtown.candidates[1].id);
+  assert.deepEqual(downtown.facts.reasonFacts, { breakEvenUnits: 15, baseUnits: 14.5, referenceUnits: 13.5, peakOrders: 48, capacity: 55 });
+
+  // Arena on the event day: capacity peak.
+  const arena = factsFor("arena", "local-event");
+  assert.equal(arena.facts.reasonCode, "CAPACITY_PEAK");
+  assert.equal(arena.facts.reasonFacts.peakOrders, Math.max(...arena.outlook.hours.map((hour) => hour.scenarioOrders)));
+  assert.equal(arena.facts.reasonFacts.capacity, 40);
+  assert.ok(arena.facts.reasonFacts.peakOrders > arena.facts.reasonFacts.capacity);
+
+  // Residential: nothing unusual.
+  assert.equal(factsFor("residential", "typical").facts.reasonCode, "DEMAND_WITHIN_USUAL");
+
+  // Sparse history, with and without the cautious trial; and a discount that clears.
+  const data = loadPlanningData({ date, scenario: "typical" });
+  const recent = <T extends { date: string }>(buckets: T[]) => buckets.filter((bucket) => bucket.date >= "2026-09-20");
+  const cheapAndBusy = (source: typeof data) => ({
+    ...source,
+    menu: source.menu.map((item) => (item.id === "coffee-pastry-pair" ? { ...item, variableCostCents: 100 } : item)),
+    itemSales: source.itemSales.map((bucket) => (bucket.itemId === "coffee-pastry-pair" ? { ...bucket, units: bucket.units * 10 } : bucket)),
+  });
+  const sparse = cheapAndBusy({ ...data, orderTotals: recent(data.orderTotals), itemSales: recent(data.itemSales) });
+  const sparseOutlook = calculateLocationOutlook(sparse, { date, scenario: "typical", locationId: "downtown" });
+  const sparseCandidates = evaluateOffers(sparse, sparseOutlook);
+  assert.equal(selectionFacts(sparseCandidates, sparseOutlook).reasonCode, "SPARSE_HISTORY");
+  const trial = selectionFacts(sparseCandidates, sparseOutlook, { sparseTrial: true });
+  assert.equal(trial.reasonCode, "DISCOUNT_CLEARS_BREAK_EVEN");
+  assert.equal(trial.selectedCandidateId, selectRecommendedCandidate(sparseCandidates, sparseOutlook, { sparseTrial: true }).selectedCandidateId);
+  assert.equal(trial.comparedCandidateId, trial.selectedCandidateId);
+
+  const clearing = cheapAndBusy(data);
+  const clearingOutlook = calculateLocationOutlook(clearing, { date, scenario: "typical", locationId: "downtown" });
+  const clearingCandidates = evaluateOffers(clearing, clearingOutlook);
+  const cleared = selectionFacts(clearingCandidates, clearingOutlook);
+  const selected = clearingCandidates.find((candidate) => candidate.id === cleared.selectedCandidateId)!;
+  assert.equal(cleared.reasonCode, "DISCOUNT_CLEARS_BREAK_EVEN");
+  assert.equal(selected.kind, "discount");
+  assert.deepEqual(cleared.reasonFacts, {
+    breakEvenUnits: selected.breakEvenUnits,
+    baseUnits: selected.responseScenarios.find((scenario) => scenario.label === "base")!.units,
+    referenceUnits: selected.referenceUnits,
+    peakOrders: 48,
+    capacity: 55,
+  });
+  assert.ok(cleared.reasonFacts.baseUnits! >= cleared.reasonFacts.breakEvenUnits!);
 }
 
 console.log("✓ engine checks passed");
