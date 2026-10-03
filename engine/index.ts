@@ -32,11 +32,29 @@ const RESPONSE_LABELS: Array<ResponseScenario["label"]> = ["low", "base", "high"
 /** Assumed unit change vs. regular price for a scenario, e.g. 0.15 = +15%. */
 const assumedUnitChange = (label: ResponseScenario["label"], discountPct: number) => (RESPONSE_PER_DISCOUNT_PCT[label] * discountPct) / 100;
 
+/**
+ * Dayparts used by the sparse-history fallback. Local hours, start-inclusive, end-exclusive.
+ * "morning" only applies to locations that open before 11:00; "dinner" runs to close.
+ */
+export const DAYPARTS = [
+  { id: "morning", label: "morning (open–11:00)", startHour: 0, endHour: 11 },
+  { id: "lunch", label: "lunch (11:00–14:00)", startHour: 11, endHour: 14 },
+  { id: "afternoon", label: "afternoon (14:00–17:00)", startHour: 14, endHour: 17 },
+  { id: "dinner", label: "dinner (17:00–close)", startHour: 17, endHour: 24 },
+] as const;
+
+type Daypart = (typeof DAYPARTS)[number];
+const daypartOf = (hour: number): Daypart => DAYPARTS.find((daypart) => hour >= daypart.startHour && hour < daypart.endHour)!;
+
 export const ENGINE_ASSUMPTIONS = [
   "Context adjustments are fixture assumptions, not calibrated effects.",
   "Discount response is an assumption, not elasticity learned from traffic: low = +0% units (no response), base = 1.5× the discount percentage, high = 3× (10% off → +0% / +15% / +30%).",
   "Contribution is before fixed costs; it is not total restaurant profit.",
   "Item mix is assumed unchanged by context adjustments.",
+  `Sparse history: an hour with fewer than ${MIN_OBSERVATIONS} same-weekday observations uses the average hour of its daypart (${DAYPARTS.map((daypart) => daypart.label).join(", ")}) across weekdays or weekends.`,
+  "Discount scenarios ignore substitution and cannibalization: demand shifted from other items or from other hours is not modeled.",
+  "Break-even compares against expected units at the regular price for this scenario, not the raw historical baseline.",
+  "Units per order are assumed stable: when an hour's expected orders exceed capacity, item units are scaled down to the serviceable share, and a discount's assumed response is capped where the implied orders would exceed capacity.",
 ];
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
@@ -99,19 +117,22 @@ function averageOf<T extends { date: string; hour: number; promotion: boolean }>
   date: string,
   hour: number,
   value: (bucket: T) => number,
-): { mean: number; count: number; fallback: boolean } {
+): { mean: number; count: number; fallback: boolean; daypart: Daypart } {
   const weekday = weekdayOf(date);
+  const daypart = daypartOf(hour);
   const sameWeekday = buckets
     .filter((bucket) => bucket.hour === hour && !bucket.promotion && bucket.date < date && weekdayOf(bucket.date) === weekday)
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, COMPARABLE_WEEKS);
   if (sameWeekday.length >= MIN_OBSERVATIONS) {
-    return { mean: sum(sameWeekday.map(value)) / sameWeekday.length, count: sameWeekday.length, fallback: false };
+    return { mean: sum(sameWeekday.map(value)) / sameWeekday.length, count: sameWeekday.length, fallback: false, daypart };
   }
-  // Sparse fallback: same weekday/weekend daypart hour over the available history.
+  // Sparse fallback: the average hour of this hour's daypart, across weekdays or weekends, over the available history.
   const weekend = isWeekend(date);
-  const broader = buckets.filter((bucket) => bucket.hour === hour && !bucket.promotion && bucket.date < date && isWeekend(bucket.date) === weekend);
-  return { mean: broader.length ? sum(broader.map(value)) / broader.length : 0, count: broader.length, fallback: true };
+  const broader = buckets.filter(
+    (bucket) => bucket.hour >= daypart.startHour && bucket.hour < daypart.endHour && !bucket.promotion && bucket.date < date && isWeekend(bucket.date) === weekend,
+  );
+  return { mean: broader.length ? sum(broader.map(value)) / broader.length : 0, count: broader.length, fallback: true, daypart };
 }
 
 function openHours(location: Location): number[] {
@@ -127,12 +148,14 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
   const capacityShare = data.chain.policy.capacityWarningShare;
   const orderBuckets = data.orderTotals.filter((bucket) => bucket.locationId === location.id);
   const hours = openHours(location);
-  let fallbackUsed = false;
   let observationCount = Infinity;
+  const orderFallbackDayparts = new Set<Daypart>();
+  const itemFallbackDayparts = new Set<Daypart>();
+  const sparseItemNames: string[] = [];
 
   const hourly: HourOutlook[] = hours.map((hour) => {
     const baseline = averageOf(orderBuckets, date, hour, (bucket) => bucket.orders);
-    fallbackUsed ||= baseline.fallback;
+    if (baseline.fallback) orderFallbackDayparts.add(baseline.daypart);
     observationCount = Math.min(observationCount, baseline.count);
     const { adjustment, signalIds } = hourAdjustment(data.contextSignals, location, date, hour, "assumedOrderAdjustment");
     const scenarioOrders = round1(baseline.mean * (1 + adjustment));
@@ -147,6 +170,10 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
     };
   });
 
+  /** Share of each hour's scenario orders that fits within capacity (1 when unconstrained). */
+  const serviceableShare = new Map(hourly.map((hour) => [hour.hour, hour.scenarioOrders > hour.capacityOrders ? hour.serviceableOrders / hour.scenarioOrders : 1]));
+  const capped = hourly.filter((hour) => hour.scenarioOrders > hour.capacityOrders);
+
   const items: ItemOutlook[] = data.menu
     .filter((item) => item.eligibleLocationIds.includes(location.id))
     .map((item) => {
@@ -155,8 +182,14 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
         itemId: item.id,
         hours: hours.map((hour) => {
           const baseline = averageOf(buckets, date, hour, (bucket) => bucket.units);
+          if (baseline.fallback) {
+            itemFallbackDayparts.add(baseline.daypart);
+            if (!sparseItemNames.includes(item.name)) sparseItemNames.push(item.name);
+          }
+          observationCount = Math.min(observationCount, baseline.count);
           const { adjustment } = hourAdjustment(data.contextSignals, location, date, hour, "assumedUnitAdjustment");
-          return { hour, baselineUnits: round1(baseline.mean), scenarioUnits: round1(baseline.mean * (1 + adjustment)) };
+          // Assumes stable units per order: units shrink with the orders the kitchen cannot serve.
+          return { hour, baselineUnits: round1(baseline.mean), scenarioUnits: round1(baseline.mean * (1 + adjustment) * serviceableShare.get(hour)!) };
         }),
       };
     });
@@ -195,8 +228,16 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
         : "typical";
 
   const notes: string[] = [];
-  if (fallbackUsed) notes.push("Sparse same-weekday history; some hours use a broader weekday/weekend average.");
+  const dayKind = isWeekend(date) ? "weekend" : "weekday";
+  const daypartList = (dayparts: Set<Daypart>) => DAYPARTS.filter((daypart) => dayparts.has(daypart)).map((daypart) => daypart.label).join(", ");
+  if (orderFallbackDayparts.size) notes.push(`Sparse same-weekday order history; daypart fallback used: hours in ${daypartList(orderFallbackDayparts)} use that daypart's average hour across ${dayKind} days.`);
+  if (itemFallbackDayparts.size) {
+    notes.push(
+      `${orderFallbackDayparts.size ? "Item sales history is also sparse" : "Order history is sufficient, but item sales history is sparse"} for ${sparseItemNames.join(", ")}; daypart fallback used for units in ${daypartList(itemFallbackDayparts)} across ${dayKind} days.`,
+    );
+  }
   if (constrained) notes.push(`Peak of ${peak.scenarioOrders} orders at ${peak.hour}:00 is at or above ${Math.round(capacityShare * 100)}% of capacity (${location.hourlyCapacityOrders}/hour).`);
+  if (capped.length) notes.push(`Item units at ${capped.map((hour) => `${hour.hour}:00`).join(", ")} are scaled to serviceable orders (assumes stable units per order).`);
   notes.push("Baseline excludes hours with past promotions.");
 
   return {
@@ -212,7 +253,7 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
     focusWindow: { date, startHour: focus.startHour, endHour: focus.startHour + FOCUS_WINDOW_HOURS },
     focusReason,
     appliedSignalIds: [...new Set(hourly.flatMap((hour) => hour.signalIds))],
-    evidenceQuality: fallbackUsed ? "sparse" : "good",
+    evidenceQuality: orderFallbackDayparts.size || itemFallbackDayparts.size ? "sparse" : "good",
     observationCount: Number.isFinite(observationCount) ? observationCount : 0,
     notes,
   };
@@ -261,8 +302,20 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
   const variableCostCents = item?.variableCostCents ?? null;
   const proposedPriceCents = discountedPriceCents(regularPriceCents, terms.discountPct);
   const windowHours = outlook.hours.filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour);
-  const itemHours = outlook.items.find((entry) => entry.itemId === terms.itemId)?.hours ?? [];
-  const referenceUnits = round1(sum(itemHours.filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour).map((hour) => hour.scenarioUnits)));
+  const itemHours = (outlook.items.find((entry) => entry.itemId === terms.itemId)?.hours ?? []).filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour);
+  const referenceUnits = round1(sum(itemHours.map((hour) => hour.scenarioUnits)));
+  /**
+   * Units an assumed response cannot deliver because the implied orders would exceed capacity.
+   * Assumes stable units per order, so an hour's orders move in proportion to the item's units.
+   */
+  const unservedUnits = (unitChange: number) =>
+    sum(
+      itemHours.map((itemHour) => {
+        const hour = windowHours.find((entry) => entry.hour === itemHour.hour);
+        if (!hour || hour.serviceableOrders <= 0) return 0;
+        return itemHour.scenarioUnits * Math.max(0, 1 + unitChange - hour.capacityOrders / hour.serviceableOrders);
+      }),
+    );
   const windowOrders = round1(sum(windowHours.map((hour) => hour.scenarioOrders)));
   const windowCapacityOrders = sum(windowHours.map((hour) => hour.capacityOrders));
 
@@ -297,13 +350,17 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
     }
   }
 
+  if (kind === "no-change" && item && variableCostCents === null) {
+    issues.push({ code: "MISSING_COST", severity: "warning", field: "itemId", message: "Variable cost is unknown; contribution cannot be shown for the regular price." });
+  }
+
   const contributionPerUnitCents = variableCostCents === null ? null : proposedPriceCents - variableCostCents;
   const referenceContributionCents = variableCostCents === null ? null : Math.round(referenceUnits * (regularPriceCents - variableCostCents));
   const responseScenarios: ResponseScenario[] =
     kind === "discount" && contributionPerUnitCents !== null
       ? RESPONSE_LABELS.map((label) => {
           const change = assumedUnitChange(label, terms.discountPct);
-          const units = round1(referenceUnits * (1 + change));
+          const units = round1(referenceUnits * (1 + change) - unservedUnits(change));
           return { label, assumedUnitChange: change, units, contributionCents: Math.round(units * contributionPerUnitCents) };
         })
       : [];
