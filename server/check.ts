@@ -41,6 +41,10 @@ try {
     assert.equal((await call("GET", "/api/locations/nowhere/outlook")).status, 404);
     assert.equal((await call("GET", "/api/overview?scenario=bogus")).status, 400);
 
+    const unavailableResearch = await call<{ results: Array<{ run: { status: string } }> }>("POST", "/api/locations/downtown/competitor-research", { date });
+    assert.equal(unavailableResearch.status, 200);
+    assert.ok(unavailableResearch.json.results.every((result) => result.run.status === "unavailable"));
+
     let rec = (await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json;
     assert.equal(rec.revision, 1);
     assert.equal((await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json.id, rec.id, "create is idempotent");
@@ -190,6 +194,23 @@ try {
   );
   assert.deepEqual(Object.keys((zooWorkRequest as { input: Record<string, unknown> }).input).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
   assert.equal(createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
+
+  // The route returns Tavily sources only as manager-review evidence.
+  await withServer(
+    async (call) => {
+      const research = await call<{ results: Array<{ run: { status: string }; evidence: Array<{ observationStatus: string; priceCents: number | null }> }> }>("POST", "/api/locations/downtown/competitor-research", { date });
+      assert.equal(research.status, 200);
+      assert.ok(research.json.results.every((result) => result.run.status === "completed"));
+      assert.ok(research.json.results.flatMap((result) => result.evidence).every((evidence) => evidence.observationStatus === "needs_review" && evidence.priceCents === null));
+    },
+    {
+      tavilySearchTransport: {
+        async search() {
+          return { providerRequestId: "tavily-server-check", sources: [{ url: "https://bluebottlecoffee.com/menu", title: "Official menu", claimText: "Source-backed menu snippet", retrievedAt: "2026-10-03T12:00:00Z" }] };
+        },
+      },
+    },
+  );
   console.log("✓ server workflow checks passed");
 } finally {
   rmSync(dataDir, { recursive: true, force: true });

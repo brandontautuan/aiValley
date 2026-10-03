@@ -4,6 +4,7 @@ import {
   type ApiError,
   type ApproveStrategyRunRequest,
   type ContentRequest,
+  type CompetitorResearchResponse,
   type Location,
   type CreateStrategyRunRequest,
   type CreateRecommendationRequest,
@@ -25,9 +26,9 @@ import {
   type StrategyRunResponse,
   type TrendEvidence,
 } from "../contracts/index.ts";
-import { DEFAULT_PLANNING_DATE, loadPlanningData } from "../data/index.ts";
+import { DEFAULT_PLANNING_DATE, loadPlanningData, SF_COMPETITOR_PROFILES } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "../engine/index.ts";
-import { BRAND_TONE, generateExplanation, generateSocialDraft, type ContentModel, type ContentPacket } from "../intelligence/index.ts";
+import { BRAND_TONE, generateExplanation, generateSocialDraft, searchCompetitorOffers, type ContentModel, type ContentPacket, type TavilySearchTransport } from "../intelligence/index.ts";
 import type { Store } from "./store.ts";
 
 export class ApiFailure extends Error {
@@ -109,10 +110,12 @@ export interface PlannerOptions {
   store: Store;
   model?: ContentModel;
   strategyWorkflow?: StrategyWorkflow;
+  /** Server-only transport; a missing key returns explicit unavailable research states. */
+  tavilySearchTransport?: TavilySearchTransport;
   now?: () => Date;
 }
 
-export function createPlanner({ store, model, strategyWorkflow, now = () => new Date() }: PlannerOptions) {
+export function createPlanner({ store, model, strategyWorkflow, tavilySearchTransport, now = () => new Date() }: PlannerOptions) {
   function compute(date: string, scenario: ScenarioId, locationId: string) {
     const data = loadPlanningData({ date, scenario });
     const location = data.locations.find((entry) => entry.id === locationId);
@@ -399,6 +402,21 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
     },
 
     createRecommendation: createRecommendationDraft,
+
+    /** Refreshes only approved coffee-demo profile seeds; web evidence never becomes an offer automatically. */
+    async competitorResearch(locationId: string, body: { date?: unknown } = {}): Promise<CompetitorResearchResponse> {
+      const date = parseDate(body.date);
+      const data = loadPlanningData({ date, scenario: "typical", locationId });
+      const location = data.locations.find((entry) => entry.id === locationId) ?? fail(404, "NOT_FOUND", `Unknown location ${locationId}`);
+      const competitors = SF_COMPETITOR_PROFILES[locationId] ?? [];
+      if (competitors.length === 0) fail(404, "NOT_FOUND", `No configured competitor profiles for ${locationId}`);
+      const batch = await searchCompetitorOffers(
+        { locationId, locationName: `${location.name}, San Francisco`, planningDate: date, competitors },
+        tavilySearchTransport,
+        now(),
+      );
+      return { contractVersion: CONTRACT_VERSION, fixtureLabel: data.fixtureLabel, results: batch.results };
+    },
 
     /** Creates a durable, approval-gated strategy run around the existing offer recommendation. */
     async createStrategyRun(body: Partial<CreateStrategyRunRequest>): Promise<StrategyRunResponse> {

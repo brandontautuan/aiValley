@@ -59,4 +59,4 @@ Shared types and conventions are in `contracts/index.ts`:
 ## Stretch goals
 
 - **Model adapter.** Implement `ContentModel` in `intelligence/` and pass it into `createPlanner`. Output that fails validation falls back to templates.
-- **Tavily competitor research.** `intelligence/competitorResearch.ts` is ready. The endpoint currently returns `FEATURE_UNAVAILABLE`.
+- **Tavily competitor research.** The coffee demo refreshes only configured profile seeds and returns attributed, manager-review-only evidence. Evidence promotion and dynamic competitor discovery remain stretch work.

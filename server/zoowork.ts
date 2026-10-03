@@ -70,7 +70,7 @@ export function createZooWorkStrategyWorkflow({ runUrl, apiKey, fetch: request =
 
       return {
         zooWorkRunId,
-        evidence: normalizeEvidence(body, zooWorkRunId, input.location.name, now()),
+        evidence: normalizeEvidence(body, zooWorkRunId, input.location.name, now().toISOString()),
       };
     },
   };

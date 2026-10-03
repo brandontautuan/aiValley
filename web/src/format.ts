@@ -17,6 +17,22 @@ export const units = (value: number) => (Number.isInteger(value) ? String(value)
 export const dateLabel = (date: string) =>
   new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 
+export const shortDate = (date: string) =>
+  new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+
+/** Calendar arithmetic on YYYY-MM-DD strings (no timezone involved). */
+export function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+/** Local time of day for an ISO timestamp in a location's timezone, e.g. "11:00 AM". */
+export const localTime = (iso: string, timeZone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+
+/** Local YYYY-MM-DD for an ISO timestamp in a timezone. */
+export const localDate = (iso: string, timeZone: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone });
+
 export const timestamp = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
 export const CLASSIFICATION_LABEL: Record<DemandClassification, string> = {
