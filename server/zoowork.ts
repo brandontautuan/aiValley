@@ -88,10 +88,24 @@ export function createZooWorkStrategyWorkflow({ agentId, client, now = () => new
  */
 export function createZooWorkContentModel({ agentId, client, timeoutMs = REQUEST_TIMEOUT_MS }: ZooWorkContentModelOptions): ContentModel {
   async function run(task: "social_draft" | "explanation", packet: ContentPacket): Promise<Record<string, unknown>> {
-    const session = await client.createSession(agentId, {
-      initial_events: [{ type: "user.message", content: JSON.stringify({ task, instructions: contentInstructions(task), packet: boundedContentPacket(packet) }) }],
-    });
-    const result = await readRun(client, agentId, session.session_id, timeoutMs);
+    const where = `agent …${agentId.slice(-4)}, base ${process.env.ZOOWORK_BASE_URL ?? "(default)"}`;
+    let session: { session_id: string };
+    try {
+      session = await client.createSession(agentId, {
+        initial_events: [{ type: "user.message", content: JSON.stringify({ task, instructions: contentInstructions(task), packet: boundedContentPacket(packet) }) }],
+      });
+    } catch (error) {
+      console.warn(`[zoowork] createSession failed (${where})`);
+      throw error;
+    }
+    console.warn(`[zoowork] createSession ok (${where}), session ${session.session_id}`);
+    let result: Awaited<ReturnType<typeof readRun>>;
+    try {
+      result = await readRun(client, agentId, session.session_id, timeoutMs);
+    } catch (error) {
+      console.warn(`[zoowork] reading session events failed (${where})`);
+      throw error;
+    }
     if (result.outcome !== "succeeded") throw new Error(`ZooWork content run ${result.outcome ?? "did not finish"}`);
     return asRecord(parseAgentJson(result.text));
   }
@@ -126,7 +140,8 @@ export async function createZooWorkStrategyWorkflowFromEnv(env: NodeJS.ProcessEn
     const packageName = "@zoowork-ai/sdk";
     const sdk = (await import(packageName)) as ZooWorkSdk;
     return createZooWorkStrategyWorkflow({ agentId, client: sdk.createZooworkClient({ apiKey }) });
-  } catch {
+  } catch (error) {
+    console.warn("[zoowork] strategy workflow unavailable; using fallback:", error instanceof Error ? error.message : error);
     return undefined;
   }
 }
@@ -142,7 +157,8 @@ export async function createZooWorkContentModelFromEnv(env: NodeJS.ProcessEnv = 
     const packageName = "@zoowork-ai/sdk";
     const sdk = (await import(packageName)) as ZooWorkSdk;
     return createZooWorkContentModel({ agentId, client: sdk.createZooworkClient({ apiKey }) });
-  } catch {
+  } catch (error) {
+    console.warn("[zoowork] content model unavailable; using templates:", error instanceof Error ? error.message : error);
     return undefined;
   }
 }

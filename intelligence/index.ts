@@ -91,6 +91,13 @@ function templateExplanation(packet: ContentPacket): Omit<Explanation, "recommen
   return { summary, evidenceIds, assumptions: packet.assumptions, risks };
 }
 
+/** Debug helper: includes ZooWork's status, code and response snippet when the error carries them. */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const { status, code, bodySnippet, requestId } = error as Error & { status?: number; code?: string; bodySnippet?: string; requestId?: string };
+  return [error.message, status && `status=${status}`, code && `code=${code}`, requestId && `requestId=${requestId}`, bodySnippet && `body=${bodySnippet}`].filter(Boolean).join(" | ");
+}
+
 export async function generateExplanation(packet: ContentPacket, model?: ContentModel, now = new Date()): Promise<Explanation> {
   const stamp = { recommendationId: packet.recommendationId, revision: packet.revision, generatedAt: now.toISOString() };
   if (model) {
@@ -98,9 +105,12 @@ export async function generateExplanation(packet: ContentPacket, model?: Content
       const output = await model.explain(packet);
       const problems = validateGeneratedContent(packet, { text: output.summary, evidenceIds: output.evidenceIds });
       if (problems.length === 0) return { ...output, ...stamp, source: "model" };
-    } catch {
-      // Fall through to the deterministic template.
+      console.warn("[content] explanation rejected by validation; using template:", problems);
+    } catch (error) {
+      console.warn("[content] explanation model call failed; using template:", describeError(error));
     }
+  } else {
+    console.warn("[content] no content model configured; using template explanation");
   }
   return { ...templateExplanation(packet), ...stamp, source: "template" };
 }
@@ -136,13 +146,18 @@ export async function generateSocialDraft(packet: ContentPacket, model?: Content
   if (model) {
     try {
       const output = await model.draftSocial(packet);
-      if (validateGeneratedContent(packet, { text: `${output.caption} ${output.creativeBrief}` }).length === 0) {
+      const problems = validateGeneratedContent(packet, { text: `${output.caption} ${output.creativeBrief}` });
+      if (problems.length === 0) {
         content = output;
         source = "model";
+      } else {
+        console.warn("[content] social draft rejected by validation; using template:", problems, "caption:", output.caption);
       }
-    } catch {
-      // Keep the template.
+    } catch (error) {
+      console.warn("[content] social draft model call failed; using template:", describeError(error));
     }
+  } else {
+    console.warn("[content] no content model configured; using template social draft");
   }
   return {
     recommendationId: packet.recommendationId,

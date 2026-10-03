@@ -107,5 +107,6 @@ if (process.argv[1] === import.meta.filename) {
   });
   createApp(planner).listen(port, () => {
     console.log(`Revenue planner API on http://localhost:${port} (store: ${dataDir})`);
+    console.log(`[zoowork] content model: ${model ? "loaded" : "NOT loaded (templates only)"}; strategy workflow: ${strategyWorkflow ? "loaded" : "NOT loaded"}`);
   });
 }
