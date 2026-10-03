@@ -125,7 +125,15 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
               <p className="muted">Nothing is published from here. Copy goes stale as soon as the terms change.</p>
             </div>
           </div>
-          <PromotePanel recommendation={rec} location={location} busy={busy} onExplain={explain} onDraft={draft} />
+          <PromotePanel
+            recommendation={rec}
+            location={location}
+            busy={busy}
+            onExplain={explain}
+            onDraft={draft}
+            contextSignals={outlook.data.contextSignals}
+            appliedSignalIds={forecast.appliedSignalIds}
+          />
 
           <div id="approve" />
           <DecisionBar recommendation={rec} selected={selected} location={location} busy={busy} error={actionError} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />

@@ -40,7 +40,8 @@ the exact-term and evidence validation already present.
 
 Visible branding now uses Harborline Coffee. The strategy UI displays the
 strategy-run lifecycle, ranked actions, evidence freshness, and manager
-approval boundaries. Tavily evidence-review UI remains stretch work.
+approval boundaries. The location UI also surfaces Tavily results as
+manager-review-only public-web context; evidence promotion remains stretch work.
 
 ### ZooWork environment example
 
@@ -50,6 +51,7 @@ that root file):
 ```env
 ZOOWORK_API_KEY=
 ZOOWORK_AGENT_ID=
+ZOOWORK_CONTENT_AGENT_ID=
 ```
 
 Never add a real endpoint containing credentials or a real API key to Git.
@@ -63,11 +65,16 @@ the root dependencies and lockfile. Do not add an endpoint variable: the SDK
 uses its production gateway by default, and `ZOOWORK_AGENT_ID` selects the
 private Growth Planner agent.
 
+`ZOOWORK_CONTENT_AGENT_ID` is preferred for a dedicated structured-content
+agent. If it is absent, the demo uses `ZOOWORK_AGENT_ID`; either agent must
+follow the bounded JSON content prompt. Invalid/unavailable output falls back
+to deterministic templates.
+
 ## Role B Follow-Up
 
 Strategy-run contracts, routes, persistence, optional ZooWork Growth Planner
-orchestration, the strategy UI, and the bounded Tavily refresh route are
-present. Band orchestration, Tavily evidence-review/promotion, and dynamic
+and content orchestration, the strategy UI, and the bounded Tavily refresh
+route are present. Band orchestration, Tavily evidence promotion, and dynamic
 competitor discovery remain stretch work. Existing one-day recommendations
 remain the authoritative economics and approval artifacts; strategy runs
 reference them rather than replacing them.

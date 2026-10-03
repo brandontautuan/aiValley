@@ -24,6 +24,7 @@
     "vite": "^8.3.2"
   },
   "dependencies": {
+    "@zoowork-ai/sdk": "^0.11.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   }

@@ -7,7 +7,7 @@ import type { ActionPlanResponse, DecisionResponse, LocationOutlookResponse, Ove
 import { createApp } from "./index.ts";
 import { createPlanner, type PlannerOptions } from "./planner.ts";
 import { createFileStore } from "./store.ts";
-import { createZooWorkStrategyWorkflow, createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
+import { createZooWorkContentModel, createZooWorkContentModelFromEnv, createZooWorkStrategyWorkflow, createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "planner-check-"));
 const date = "2026-10-05";
@@ -208,6 +208,44 @@ try {
   );
   assert.deepEqual(Object.keys(zooWorkRequest as Record<string, unknown>).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
   assert.equal(await createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
+
+  // A separate ZooWork content agent returns structured copy, while the planner
+  // still owns validation and only passes it a bounded planning packet.
+  let zooContentRequest: Record<string, unknown> | undefined;
+  await withServer(
+    async (call) => {
+      const rec = (await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json;
+      const drafted = (await call<Recommendation>("POST", `/api/recommendations/${rec.id}/social-draft`, { expectedRevision: rec.revision })).json;
+      assert.equal(drafted.socialDraft?.source, "model");
+      assert.ok(drafted.socialDraft?.caption.includes("Downtown"));
+    },
+    {
+      model: createZooWorkContentModel({
+        agentId: "agt-content",
+        client: {
+          async createSession(_agentId, input) {
+            zooContentRequest = JSON.parse(input.initial_events[0]!.content);
+            return { session_id: "zoo-content-session" };
+          },
+          async *streamEvents() {
+            yield {
+              eventType: "agent.assistant",
+              runId: "zoo-content-run",
+              payload: {
+                message: {
+                  content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Harborline Coffee Downtown. Open today — stop in when you’re nearby.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }],
+                },
+              },
+            };
+            yield { eventType: "run.finished", runId: "zoo-content-run", payload: { status: "succeeded" } };
+          },
+        },
+      }),
+    },
+  );
+  assert.equal(zooContentRequest?.task, "social_draft");
+  assert.deepEqual(Object.keys(zooContentRequest?.packet as Record<string, unknown>).sort(), ["assumptions", "brandTone", "competitorOffers", "contextSignals", "deterministicReason", "location", "outlook", "recommendationId", "revision", "selected"]);
+  assert.equal(await createZooWorkContentModelFromEnv({}), undefined, "missing content-agent credentials leave templates active");
 
   // The route returns Tavily sources only as manager-review evidence.
   await withServer(
