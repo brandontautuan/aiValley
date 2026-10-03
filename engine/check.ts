@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { OfferTerms } from "../contracts/index.ts";
+import type { OfferTerms, PlanningData } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
 import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
 
@@ -13,6 +13,52 @@ assert.equal(20 * (1400 - 500), 18_000);
 assert.equal(breakEvenUnits(20, 1400, price, 500), 24);
 assert.equal(Math.round(26 * (price - 500)), 19_760);
 assert.equal(breakEvenUnits(20, 1400, 400, 500), null, "nonpositive contribution must not divide");
+
+// The same $14 / $5 / 20-unit example, end to end through the engine on a minimal inline dataset.
+{
+  const window = { date, startHour: 14, endHour: 17 };
+  const unitsByHour: Record<number, number> = { 14: 7, 15: 7, 16: 6 }; // 20 units across the window
+  const mondays = ["2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"];
+  const openHours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+  const example: PlanningData = {
+    request: { date, scenario: "typical" },
+    fixtureLabel: "engine/check.ts inline example",
+    chain: { id: "example-chain", name: "Example Chain", currency: "USD", policy: { maxDiscountPct: 10, minContributionPerUnitCents: 300, costFreshnessDays: 60, capacityWarningShare: 0.9 } },
+    locations: [{ id: "example", chainId: "example-chain", name: "Example Shop", timezone: "America/Los_Angeles", latitude: 0, longitude: 0, openingHours: { open: 10, close: 20 }, hourlyCapacityOrders: 100, profile: "inline example" }],
+    menu: [{ id: "example-pair", name: "Example Pair", category: "bundle", offerEligible: true, regularPriceCents: 1400, variableCostCents: 500, costUpdatedAt: "2026-09-15T09:00:00-07:00", eligibleLocationIds: ["example"] }],
+    orderTotals: mondays.flatMap((day) => openHours.map((hour) => ({ locationId: "example", date: day, hour, orders: 10, promotion: false }))),
+    itemSales: mondays.flatMap((day) =>
+      openHours.map((hour) => {
+        const units = unitsByHour[hour] ?? 10;
+        return { locationId: "example", itemId: "example-pair", date: day, hour, units, revenueCents: units * 1400, effectivePriceCents: 1400, promotion: false };
+      }),
+    ),
+    contextSignals: [],
+    competitorOffers: [],
+  };
+  const outlook = calculateLocationOutlook(example, { date, scenario: "typical", locationId: "example" });
+  assert.equal(outlook.evidenceQuality, "good");
+  const [keepPrice, tenPct] = evaluateOffers(example, outlook, { locationId: "example", itemId: "example-pair", window, discountPct: 10 });
+
+  assert.equal(keepPrice.kind, "no-change");
+  assert.equal(keepPrice.referenceUnits, 20);
+  assert.equal(keepPrice.referenceContributionCents, 18_000, "baseline contribution is $180");
+
+  assert.deepEqual(tenPct.issues, []);
+  assert.equal(tenPct.valid, true);
+  assert.equal(tenPct.proposedPriceCents, 1260);
+  assert.equal(tenPct.contributionPerUnitCents, 760);
+  assert.equal(tenPct.referenceUnits, 20);
+  assert.equal(tenPct.referenceContributionCents, 18_000);
+  assert.equal(tenPct.breakEvenUnits, 24);
+  // The 26-unit scenario from the design is the high response here (20 units + 30%).
+  const high = tenPct.responseScenarios.find((scenario) => scenario.label === "high")!;
+  assert.equal(high.units, 26);
+  assert.equal(high.contributionCents, 19_760, "26 units at $7.60 is $197.60");
+  assert.ok(high.units >= tenPct.breakEvenUnits! && high.contributionCents > tenPct.referenceContributionCents!, "26 units clears the 24-unit break-even");
+  assert.equal(26 * tenPct.contributionPerUnitCents!, 19_760);
+  assert.equal(breakEvenUnits(tenPct.referenceUnits, tenPct.regularPriceCents, tenPct.proposedPriceCents, tenPct.variableCostCents!), 24);
+}
 
 const outlookFor = (locationId: string, scenario: "typical" | "local-event") => {
   const data = loadPlanningData({ date, scenario });
