@@ -532,3 +532,15 @@ button, .button { min-height: 44px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Store cards whose data calls for action get a coloured edge and a pulsing dot; steady stores stay quiet. */
+.store-card.attention-change { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.store-card.attention-hold { box-shadow: 0 0 0 2px var(--danger), var(--shadow); }
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-dot 1.6s ease-out infinite; }
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 7px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot { animation: none; }
+}

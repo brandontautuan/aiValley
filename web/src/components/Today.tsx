@@ -49,13 +49,18 @@ export function Today({ date, scenario }: { date: string; scenario: ScenarioId }
           const savedPlan = data.plans.find((plan) => plan.locationId === summary.location.id);
           const selected = savedPlan?.finalTerms ?? selectedCandidate(outlook);
           const saved = Boolean(savedPlan);
+          // What the data asks of the manager: a price change, protecting a busy peak, or nothing.
+          const attention = saved ? null : selected.kind === "discount" ? "change" : summary.classification === "constrained" ? "hold" : null;
           return (
-            <article key={summary.location.id} className="card store-card">
+            <article key={summary.location.id} className={`card store-card ${attention ? `attention-${attention}` : ""}`}>
               <div className="card-head">
                 <h2>{summary.location.name}</h2>
-                <span className={`badge ${saved ? "ok" : ""}`}>{saved ? "Plan saved" : "To review"}</span>
+                <span className={`badge ${saved || attention === "change" ? "ok" : attention === "hold" ? "danger" : ""}`}>
+                  {attention && <span className="pulse-dot" aria-hidden />}
+                  {saved ? "Plan saved" : attention === "change" ? "Change suggested" : attention === "hold" ? "Busy peak · hold price" : "No change needed"}
+                </span>
               </div>
-              <div className={`action ${selected.kind === "discount" ? "promo" : ""}`}>
+              <div className={`action ${selected.kind === "discount" ? "promo" : attention === "hold" ? "hold" : ""}`}>
                 <span className="muted small">{saved ? "Saved action" : "Suggested action"}</span>
                 <strong>{saved && selected.kind === "no-change" ? "Keep regular price" : actionLabel(selected, outlook.outlook)}</strong>
               </div>
