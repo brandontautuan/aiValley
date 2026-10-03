@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { OfferTerms } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
-import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
+import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
 
 const date = "2026-10-05";
 
@@ -167,6 +167,71 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
 // Assumptions name the daypart fallback, cannibalization and the break-even basis.
 for (const phrase of ["daypart", "cannibalization", "Break-even compares against expected units at the regular price"]) {
   assert.ok(ENGINE_ASSUMPTIONS.some((assumption) => assumption.includes(phrase)), `assumptions mention ${phrase}`);
+}
+
+// ENGINE_POLICY holds every tunable; the cautious sparse trial is off by default.
+{
+  assert.deepEqual(
+    { ...ENGINE_POLICY, dayparts: ENGINE_POLICY.dayparts.map((daypart) => daypart.id) },
+    {
+      comparableWeeks: 8,
+      minObservations: 4,
+      adjustmentBounds: { min: -0.5, max: 1 },
+      focusWindowHours: 3,
+      softWindowShare: 0.6,
+      classificationThreshold: 0.1,
+      responsePerDiscountPct: { low: 0, base: 1.5, high: 3 },
+      dayparts: ["morning", "lunch", "afternoon", "dinner"],
+      sparseTrial: false,
+    },
+  );
+  assert.equal(DAYPARTS, ENGINE_POLICY.dayparts);
+
+  const data = loadPlanningData({ date, scenario: "typical" });
+  const recent = <T extends { date: string }>(buckets: T[]) => buckets.filter((bucket) => bucket.date >= "2026-09-20");
+  const sparse = { ...data, orderTotals: recent(data.orderTotals), itemSales: recent(data.itemSales) };
+  const outlook = calculateLocationOutlook(sparse, { date, scenario: "typical", locationId: "downtown" });
+  assert.equal(outlook.evidenceQuality, "sparse");
+  assert.equal(outlook.focusReason, "soft-window");
+  const kindAndPct = (candidates: ReturnType<typeof evaluateOffers>, sparseTrial?: boolean, from = outlook) => {
+    const selection = sparseTrial === undefined ? selectRecommendedCandidate(candidates, from) : selectRecommendedCandidate(candidates, from, { sparseTrial });
+    const selected = candidates.find((candidate) => candidate.id === selection.selectedCandidateId)!;
+    return { kind: selected.kind, pct: selected.terms.discountPct, reason: selection.reason };
+  };
+
+  // Fixture costs: even the 5% base scenario misses break-even, so both settings keep price.
+  const atFixtureCost = evaluateOffers(sparse, outlook);
+  assert.equal(kindAndPct(atFixtureCost).kind, "no-change");
+  assert.equal(kindAndPct(atFixtureCost, false).kind, "no-change");
+  assert.equal(kindAndPct(atFixtureCost, true).kind, "no-change");
+
+  // A low-cost, high-volume item where both discounts clear break-even in the base scenario.
+  // (Volume matters: break-even rounds up to whole units, which a +7.5% response on ~13 units cannot reach.)
+  const itemId = atFixtureCost[0].terms.itemId;
+  const lowCost = {
+    ...sparse,
+    menu: sparse.menu.map((item) => (item.id === itemId ? { ...item, variableCostCents: 100 } : item)),
+    itemSales: sparse.itemSales.map((bucket) => (bucket.itemId === itemId ? { ...bucket, units: bucket.units * 10 } : bucket)),
+  };
+  const lowCostOutlook = calculateLocationOutlook(lowCost, { date, scenario: "typical", locationId: "downtown" });
+  assert.deepEqual([lowCostOutlook.evidenceQuality, lowCostOutlook.focusReason], ["sparse", "soft-window"]);
+  const candidates = evaluateOffers(lowCost, lowCostOutlook);
+  assert.equal(candidates[0].terms.itemId, itemId);
+  for (const candidate of candidates.filter((entry) => entry.kind === "discount")) {
+    assert.ok(candidate.valid && candidate.responseScenarios[1].units >= candidate.breakEvenUnits!, `${candidate.terms.discountPct}% clears break-even at low cost`);
+  }
+  assert.equal(kindAndPct(candidates, undefined, lowCostOutlook).kind, "no-change", "default policy keeps price on sparse history");
+  assert.equal(kindAndPct(candidates, false, lowCostOutlook).kind, "no-change");
+  const trial = kindAndPct(candidates, true, lowCostOutlook);
+  assert.deepEqual([trial.kind, trial.pct], ["discount", 5], "the trial allows only the smallest discount, never 10%");
+  assert.match(trial.reason, /Cautious trial of 5% off/);
+
+  // The switch has no effect when history is good or when capacity is the concern.
+  for (const [locationId, scenario] of [["downtown", "typical"], ["arena", "local-event"]] as const) {
+    const good = outlookFor(locationId, scenario);
+    const goodCandidates = evaluateOffers(good.data, good.outlook);
+    assert.deepEqual(selectRecommendedCandidate(goodCandidates, good.outlook, { sparseTrial: true }), selectRecommendedCandidate(goodCandidates, good.outlook));
+  }
 }
 
 console.log("✓ engine checks passed");

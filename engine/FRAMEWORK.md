@@ -27,7 +27,7 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Distinguish raw vs serviceable units; compare scenarios consistently | ✅ item units scaled to serviceable orders; response units capped at capacity (C2 done). Raw item units are not exposed: needs a contract field | request to B (optional) |
 | Report missing costs **and substitution/cannibalization limitations** | ✅ `MISSING_COST` is an error on discounts and a warning on keep-price; cannibalization stated in `ENGINE_ASSUMPTIONS` (C6 done) | — |
 | Demand response is explicit low/base/high assumption, no learned elasticity | ✅ low +0%, base 1.5×, high 3× the discount % (C1 done) | — |
-| Cautious trial/no-change when response evidence is missing | ✅ keep-price; trial optional | C4 |
+| Cautious trial/no-change when response evidence is missing | ✅ keep-price by default; optional cautious 5% trial behind `ENGINE_POLICY.sparseTrial` (C4 done) | — |
 | Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ (no customer-level inputs exist) | — |
 | Overlap check includes **channel** | ⚠️ ignored, because `OfferTerms` has no channel field | request to B (optional) |
 | Checks: $14, closed hours, missing cost, overlap, discount limit, sparse, event hours, arena no-change | ⚠️ all present, but $180 / $197.60 are plain arithmetic, not run through `evaluateOffers` | C7 |
@@ -103,7 +103,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ### Selection
 1. `capacity-peak` → keep price
-2. sparse evidence → keep price
+2. sparse evidence → keep price. If `sparseTrial` is on and the window is soft: the smallest discount only, when its base units ≥ break-even.
 3. `soft-window` → the best valid discount with no `CAPACITY_CONFLICT` whose base units ≥ break-even. Highest base contribution wins; if none qualifies, keep price.
 4. Otherwise → keep price (demand within usual range)
 
@@ -120,7 +120,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ## 4. Work queue
 
-Order: **C1 (done) → C2 (done) → C6 (done) → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
+Order: **C1 (done) → C2 (done) → C6 (done) → C7** (design-required), then **C4 (done)**, then optional **C3 / C5** only if the team agrees.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
 Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
@@ -147,7 +147,10 @@ The bowl fixtures are gone. The default item filter now uses `MenuItem.offerElig
 - Add a substitution/cannibalization limitation note either way; the design requires it (also listed in C6).
 - **Check (if built):** Residential evaluates the extra item; Downtown and Arena never get it.
 
-### C4. Selection and policy tuning (engine-only)
+### C4. Selection and policy tuning (engine-only) — DONE
+Outcome: `ENGINE_POLICY` exported with all tunables; behavior unchanged with the default `sparseTrial: false`. Finding: break-even rounds up to whole units, so in low-volume windows a 5% offer cannot clear it even at near-zero cost (see `HANDOFF.md`).
+
+Original brief:
 - The design suggests a *cautious trial* for low evidence instead of a flat keep-price. Option: allow only the smallest discount (5%) when evidence is sparse and the window is soft. Keep it off if the team prefers a stricter demo.
 - Move tunables (`ADJUSTMENT_BOUNDS`, `CLASSIFICATION_THRESHOLD`, `SOFT_WINDOW_SHARE`, response values) into one exported `ENGINE_POLICY` constant. The UI can then show them, and later B could move them into `ChainPolicy`.
 

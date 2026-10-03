@@ -16,32 +16,58 @@ import type {
 
 /** Pure, deterministic demand and pricing functions. No I/O, no model calls. */
 
-const COMPARABLE_WEEKS = 8;
-const MIN_OBSERVATIONS = 4;
-const ADJUSTMENT_BOUNDS = { min: -0.5, max: 1.0 };
-const FOCUS_WINDOW_HOURS = 3;
-const SOFT_WINDOW_SHARE = 0.6;
-const CLASSIFICATION_THRESHOLD = 0.1;
 /**
- * Assumed unit change per 1% discount (low/base/high). An explicit assumption, not elasticity.
- * Low means no response: nobody buys more because of the offer.
+ * Every tunable the engine uses, in one place. These are judgment calls, not measured values.
+ * Changing a value here changes engine behavior; `sparseTrial` is the only switch.
  */
-const RESPONSE_PER_DISCOUNT_PCT: Record<ResponseScenario["label"], number> = { low: 0, base: 1.5, high: 3 };
+export const ENGINE_POLICY = {
+  /** Most recent same-weekday observations averaged into a baseline. */
+  comparableWeeks: 8,
+  /** Fewer same-weekday observations than this triggers the daypart fallback. */
+  minObservations: 4,
+  /** Bounds on the combined context adjustment for one hour. */
+  adjustmentBounds: { min: -0.5, max: 1.0 },
+  focusWindowHours: 3,
+  /** A window averaging below this share of the day's average hour counts as soft. */
+  softWindowShare: 0.6,
+  /** Change vs. usual at or beyond this share classifies the day as busy or soft. */
+  classificationThreshold: 0.1,
+  /**
+   * Assumed unit change per 1% discount (low/base/high). An explicit assumption, not elasticity.
+   * Low means no response: nobody buys more because of the offer.
+   */
+  responsePerDiscountPct: { low: 0, base: 1.5, high: 3 } as Record<ResponseScenario["label"], number>,
+  /**
+   * Dayparts used by the sparse-history fallback. Local hours, start-inclusive, end-exclusive.
+   * "morning" only applies to locations that open before 11:00; "dinner" runs to close.
+   */
+  dayparts: [
+    { id: "morning", label: "morning (open–11:00)", startHour: 0, endHour: 11 },
+    { id: "lunch", label: "lunch (11:00–14:00)", startHour: 11, endHour: 14 },
+    { id: "afternoon", label: "afternoon (14:00–17:00)", startHour: 14, endHour: 17 },
+    { id: "dinner", label: "dinner (17:00–close)", startHour: 17, endHour: 24 },
+  ] as const,
+  /**
+   * Cautious trial: when history is sparse and the window is soft, allow only the smallest
+   * discount, and only if its base scenario clears break-even. Off by default (keep price).
+   */
+  sparseTrial: false as boolean,
+};
+
+const {
+  comparableWeeks: COMPARABLE_WEEKS,
+  minObservations: MIN_OBSERVATIONS,
+  adjustmentBounds: ADJUSTMENT_BOUNDS,
+  focusWindowHours: FOCUS_WINDOW_HOURS,
+  softWindowShare: SOFT_WINDOW_SHARE,
+  classificationThreshold: CLASSIFICATION_THRESHOLD,
+  responsePerDiscountPct: RESPONSE_PER_DISCOUNT_PCT,
+} = ENGINE_POLICY;
+export const DAYPARTS = ENGINE_POLICY.dayparts;
 const RESPONSE_LABELS: Array<ResponseScenario["label"]> = ["low", "base", "high"];
 
 /** Assumed unit change vs. regular price for a scenario, e.g. 0.15 = +15%. */
 const assumedUnitChange = (label: ResponseScenario["label"], discountPct: number) => (RESPONSE_PER_DISCOUNT_PCT[label] * discountPct) / 100;
-
-/**
- * Dayparts used by the sparse-history fallback. Local hours, start-inclusive, end-exclusive.
- * "morning" only applies to locations that open before 11:00; "dinner" runs to close.
- */
-export const DAYPARTS = [
-  { id: "morning", label: "morning (open–11:00)", startHour: 0, endHour: 11 },
-  { id: "lunch", label: "lunch (11:00–14:00)", startHour: 11, endHour: 14 },
-  { id: "afternoon", label: "afternoon (14:00–17:00)", startHour: 14, endHour: 17 },
-  { id: "dinner", label: "dinner (17:00–close)", startHour: 17, endHour: 24 },
-] as const;
 
 type Daypart = (typeof DAYPARTS)[number];
 const daypartOf = (hour: number): Daypart => DAYPARTS.find((daypart) => hour >= daypart.startHour && hour < daypart.endHour)!;
@@ -409,8 +435,11 @@ export function evaluateOffers(data: PlanningData, outlook: LocationOutlook, ter
 const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const hourLabel = (window: OfferWindow) => `${window.startHour}:00–${window.endHour}:00`;
 
-/** Deterministic selection. Keeping the regular price is a valid outcome. */
-export function selectRecommendedCandidate(candidates: OfferCandidate[], outlook: LocationOutlook): Selection {
+/**
+ * Deterministic selection. Keeping the regular price is a valid outcome.
+ * `policy` defaults to ENGINE_POLICY; pass `{ sparseTrial: true }` to allow the cautious trial.
+ */
+export function selectRecommendedCandidate(candidates: OfferCandidate[], outlook: LocationOutlook, policy: Pick<typeof ENGINE_POLICY, "sparseTrial"> = ENGINE_POLICY): Selection {
   const noChange = candidates.find((candidate) => candidate.kind === "no-change")!;
   const window = hourLabel(outlook.focusWindow);
 
@@ -422,6 +451,17 @@ export function selectRecommendedCandidate(candidates: OfferCandidate[], outlook
     };
   }
   if (outlook.evidenceQuality === "sparse") {
+    if (policy.sparseTrial && outlook.focusReason === "soft-window") {
+      // Cautious trial: only the smallest discount on offer, and only if its base scenario clears break-even.
+      const smallest = candidates.filter((candidate) => candidate.kind === "discount").sort((a, b) => a.terms.discountPct - b.terms.discountPct)[0];
+      const base = smallest?.responseScenarios.find((scenario) => scenario.label === "base");
+      if (smallest && base && smallest.valid && !smallest.issues.some((issue) => issue.code === "CAPACITY_CONFLICT") && smallest.breakEvenUnits !== null && base.units >= smallest.breakEvenUnits) {
+        return {
+          selectedCandidateId: smallest.id,
+          reason: `Cautious trial of ${smallest.terms.discountPct}% off ${smallest.itemName} ${window}: history is sparse, so only the smallest discount is considered. At ${dollars(smallest.proposedPriceCents)} it needs at least ${smallest.breakEvenUnits} units vs. about ${smallest.referenceUnits} expected at the regular price. Both the baseline and the demand response are assumptions to test.`,
+        };
+      }
+    }
     return { selectedCandidateId: noChange.id, reason: "Keep the regular price: history is too sparse to justify a discount." };
   }
   if (outlook.focusReason === "soft-window") {
