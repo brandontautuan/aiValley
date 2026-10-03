@@ -421,3 +421,7 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .ranked-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ranked .small-btn { margin-top: 8px; }
 .timeline { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.research-panel p { margin: 8px 0; }
+.research-run { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.research-run .evidence { margin-top: 10px; }

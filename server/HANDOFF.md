@@ -49,9 +49,10 @@
   reduced location profile, horizon, deterministic recommendation summary, and
   at most 12 bounded evidence summaries. It neither sends customer data nor
   raw social/media collections.
-- `server/index.ts` wires the adapter from server-only `ZOOWORK_GROWTH_PLANNER_URL`
-  and `ZOOWORK_API_KEY`. Missing, malformed, or unavailable configuration keeps
-  the existing deterministic fallback active.
+- `server/index.ts` wires the adapter from server-only `ZOOWORK_AGENT_ID` and
+  `ZOOWORK_API_KEY`. The optional `@zoowork-ai/sdk` package supplies the
+  documented Session API; missing credentials, SDK, or service availability
+  keeps the existing deterministic fallback active.
 - The adapter normalizes returned evidence. Only explicitly verified, attributed
   records receive `verified`; incomplete or unverified records remain visible as
   `needs_review` and planner ranking excludes them.
