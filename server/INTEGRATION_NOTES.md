@@ -48,8 +48,8 @@ Please add these **empty placeholders only** to `.env.example` (Role A owns
 that root file):
 
 ```env
-ZOOWORK_GROWTH_PLANNER_URL=
 ZOOWORK_API_KEY=
+ZOOWORK_AGENT_ID=
 ```
 
 Never add a real endpoint containing credentials or a real API key to Git.
@@ -57,6 +57,11 @@ Developers set actual values in their untracked local `.env`; deployed
 environments set them through their secret manager. The server treats either
 missing value as an optional-integration fallback and keeps the deterministic,
 manager-reviewable strategy workflow available.
+
+The server adapter uses `@zoowork-ai/sdk`; Role A should add that package to
+the root dependencies and lockfile. Do not add an endpoint variable: the SDK
+uses its production gateway by default, and `ZOOWORK_AGENT_ID` selects the
+private Growth Planner agent.
 
 ## Role B Follow-Up
 

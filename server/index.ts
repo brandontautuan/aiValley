@@ -96,11 +96,11 @@ export function createApp(planner: Planner) {
 if (process.argv[1] === import.meta.filename) {
   const port = Number(process.env.PORT ?? 3000);
   const dataDir = resolve(ROOT, process.env.DATA_DIR ?? ".data");
+  const strategyWorkflow = await createZooWorkStrategyWorkflowFromEnv();
   const planner = createPlanner({
     store: createFileStore(dataDir),
-    // Credentials stay in this server entry point; absent or invalid config uses
-    // the planner's manager-reviewable deterministic fallback.
-    strategyWorkflow: createZooWorkStrategyWorkflowFromEnv(),
+    // Missing credentials or SDK keep the manager-reviewable fallback available.
+    strategyWorkflow,
     tavilySearchTransport: createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }),
   });
   createApp(planner).listen(port, () => {
