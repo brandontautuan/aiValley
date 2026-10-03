@@ -5,6 +5,7 @@ import { brand } from "./brand.ts";
 import { ActionPlan } from "./components/ActionPlan.tsx";
 import { LocationDetail } from "./components/LocationDetail.tsx";
 import { Overview } from "./components/Overview.tsx";
+import { Strategy } from "./components/StrategyPanel.tsx";
 
 const DEFAULT_DATE = "2026-10-05";
 const SCENARIOS: Array<{ id: ScenarioId; label: string }> = [
@@ -12,11 +13,12 @@ const SCENARIOS: Array<{ id: ScenarioId; label: string }> = [
   { id: "local-event", label: "Local event day" },
 ];
 
-type Route = { page: "overview" } | { page: "location"; id: string } | { page: "plan" };
+type Route = { page: "overview" } | { page: "location"; id: string } | { page: "strategy" } | { page: "plan" };
 
 function parseHash(): Route {
   const [, page, id] = window.location.hash.replace(/^#/, "").split("/");
   if (page === "location" && id) return { page: "location", id };
+  if (page === "strategy") return { page: "strategy" };
   if (page === "plan") return { page: "plan" };
   return { page: "overview" };
 }
@@ -58,7 +60,8 @@ export function App() {
           </div>
         </div>
         <nav className="tabs">
-          <a href="#/" className={route.page !== "plan" ? "active" : ""}>Locations</a>
+          <a href="#/" className={route.page === "overview" || route.page === "location" ? "active" : ""}>Locations</a>
+          <a href="#/strategy" className={route.page === "strategy" ? "active" : ""}>Strategy</a>
           <a href="#/plan" className={route.page === "plan" ? "active" : ""}>Action plan</a>
         </nav>
         <div className="controls">
@@ -81,6 +84,7 @@ export function App() {
       <main key={epoch}>
         {route.page === "overview" && <Overview date={date} scenario={scenario} />}
         {route.page === "location" && <LocationDetail locationId={route.id} date={date} scenario={scenario} />}
+        {route.page === "strategy" && <Strategy date={date} scenario={scenario} />}
         {route.page === "plan" && <ActionPlan date={date} />}
       </main>
     </div>

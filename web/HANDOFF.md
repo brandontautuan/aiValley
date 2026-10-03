@@ -1,9 +1,11 @@
 # Role A handoff — web and app setup
 
 ## Ready interfaces and paths
-- `web/src/App.tsx`: shell, hash routing (`#/`, `#/location/:id`, `#/plan`), date/scenario selectors, demo reset.
-- `web/src/components/`: Overview, LocationDetail (chart + evidence), OfferTable, ReviewPanel (edit/approve/dismiss), ContentPanel (explanation + Instagram draft, stale copy), ActionPlan.
-- `web/src/api.ts`: typed client for every Role B endpoint; surfaces `ApiError` bodies.
+- `web/src/App.tsx`: shell, hash routing (`#/`, `#/location/:id`, `#/strategy`, `#/plan`), date/scenario selectors, demo reset.
+- `web/src/brand.ts`: all visible brand/product copy (Harborline Coffee); swap here to rebrand.
+- `web/src/components/`: Overview, LocationDetail (chart + evidence), OfferTable, ReviewPanel (edit/approve/dismiss), ContentPanel (explanation + Instagram draft, stale copy), ActionPlan, StrategyPanel.
+- `web/src/components/StrategyPanel.tsx`: multi-day strategy runs — build control (location + horizon), run view with status/revision, ranked actions with linked-recommendation and evidence refs, per-action approval honoring `expectedRevision` (reloads on `STALE_REVISION`), research-evidence list with freshness/status/limitations and empty-evidence fallback, and an event timeline.
+- `web/src/api.ts`: typed client for every Role B endpoint (incl. `createStrategyRun`/`strategyRun`/`approveStrategyRun`); surfaces `ApiError` bodies.
 
 ## Contract version
 1 (`contracts/index.ts`).

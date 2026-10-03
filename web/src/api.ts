@@ -7,6 +7,7 @@ import type {
   OverviewResponse,
   Recommendation,
   ScenarioId,
+  StrategyRunResponse,
 } from "../../contracts/index.ts";
 
 /** Error carrying the server's ApiError shape. */
@@ -54,5 +55,10 @@ export const api = {
   decide: (id: string, expectedRevision: number, action: "approve" | "dismiss") =>
     request<DecisionResponse>("POST", `/api/recommendations/${id}/decision`, { expectedRevision, action }),
   actionPlan: (date: string) => request<ActionPlanResponse>("GET", `/api/action-plan?${qs({ date })}`),
+  createStrategyRun: (locationId: string, date: string, scenario: ScenarioId, horizonDays: number) =>
+    request<StrategyRunResponse>("POST", "/api/strategy-runs", { locationId, date, scenario, horizonDays }),
+  strategyRun: (id: string) => request<StrategyRunResponse>("GET", `/api/strategy-runs/${id}`),
+  approveStrategyRun: (id: string, expectedRevision: number, actionId: string) =>
+    request<StrategyRunResponse>("POST", `/api/strategy-runs/${id}/approve`, { expectedRevision, actionId }),
   reset: () => request<{ ok: true }>("POST", "/api/demo/reset"),
 };
