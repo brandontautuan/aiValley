@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { OfferTerms } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
-import { breakEvenUnits, calculateLocationOutlook, discountedPriceCents, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
+import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
 
 const date = "2026-10-05";
 
@@ -119,20 +119,54 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   assert.deepEqual(issuesFor({}), []);
 
   const missingCost = { ...data, menu: data.menu.map((item) => (item.id === "coffee-pastry-pair" ? { ...item, variableCostCents: null } : item)) };
-  assert.ok(evaluateOffers(missingCost, outlook, terms({}))[1].issues.some((issue) => issue.code === "MISSING_COST"));
+  const [keepPriceNoCost, discountNoCost] = evaluateOffers(missingCost, outlook, terms({}));
+  assert.ok(discountNoCost.issues.some((issue) => issue.code === "MISSING_COST" && issue.severity === "error"));
+  assert.equal(discountNoCost.valid, false);
+  // Keep-price with an unknown cost is flagged as a warning and stays approvable.
+  assert.deepEqual(keepPriceNoCost.issues.map((issue) => [issue.code, issue.severity]), [["MISSING_COST", "warning"]]);
+  assert.equal(keepPriceNoCost.valid, true);
+  assert.equal(keepPriceNoCost.contributionPerUnitCents, null);
+  assert.deepEqual(evaluateOffers(data, outlook, terms({}))[0].issues, [], "keep-price with a known cost carries no issue");
   const thinMargin = { ...data, chain: { ...data.chain, policy: { ...data.chain.policy, maxDiscountPct: 80 } } };
   assert.ok(evaluateOffers(thinMargin, outlook, terms({ discountPct: 70 }))[1].issues.some((issue) => issue.code === "NONPOSITIVE_CONTRIBUTION"));
   assert.ok(evaluateOffers(thinMargin, outlook, terms({ discountPct: 50 }))[1].issues.some((issue) => issue.code === "BELOW_MIN_CONTRIBUTION"));
 }
 
-// Sparse history falls back and reports it.
+// Sparse history uses the documented daypart fallback and reports it.
 {
   const data = loadPlanningData({ date, scenario: "typical" });
-  const sparse = { ...data, orderTotals: data.orderTotals.filter((bucket) => bucket.date >= "2026-09-20"), itemSales: data.itemSales.filter((bucket) => bucket.date >= "2026-09-20") };
+  const recent = <T extends { date: string }>(buckets: T[]) => buckets.filter((bucket) => bucket.date >= "2026-09-20");
+  const sparse = { ...data, orderTotals: recent(data.orderTotals), itemSales: recent(data.itemSales) };
   const outlook = calculateLocationOutlook(sparse, { date, scenario: "typical", locationId: "downtown" });
   assert.equal(outlook.evidenceQuality, "sparse");
   assert.ok(outlook.hours.every((hour) => hour.baselineOrders > 0));
+  assert.ok(outlook.items.every((item) => item.hours.every((hour) => hour.baselineUnits > 0)));
+  assert.ok(outlook.notes.some((note) => note.includes("order history") && note.includes("daypart fallback used")));
+
+  // Every hour in a daypart shares that daypart's average; the dayparts differ from each other.
+  assert.deepEqual(DAYPARTS.map((daypart) => [daypart.id, daypart.startHour, daypart.endHour]), [["morning", 0, 11], ["lunch", 11, 14], ["afternoon", 14, 17], ["dinner", 17, 24]]);
+  const byDaypart = DAYPARTS.map((daypart) => outlook.hours.filter((hour) => hour.hour >= daypart.startHour && hour.hour < daypart.endHour).map((hour) => hour.baselineOrders));
+  assert.deepEqual(byDaypart.map((orders) => orders.length), [1, 3, 3, 3], "downtown opens at 10:00, so one morning hour");
+  for (const orders of byDaypart) assert.equal(new Set(orders).size, 1);
+  assert.equal(new Set(byDaypart.map((orders) => orders[0])).size, DAYPARTS.length);
+  // The lunch value is the mean of the weekday lunch-hour buckets, not a single hour's history.
+  const lunchBuckets = sparse.orderTotals.filter((bucket) => bucket.locationId === "downtown" && bucket.hour >= 11 && bucket.hour < 14 && !bucket.promotion && ![0, 6].includes(new Date(`${bucket.date}T12:00:00Z`).getUTCDay()));
+  assert.equal(byDaypart[1][0], Math.round((lunchBuckets.reduce((total, bucket) => total + bucket.orders, 0) / lunchBuckets.length) * 10) / 10);
   assert.equal(selectRecommendedCandidate(evaluateOffers(sparse, outlook), outlook).selectedCandidateId.startsWith("no-change"), true);
+
+  // Evidence quality is the worse of order and item history.
+  const itemSparse = { ...data, itemSales: recent(data.itemSales) };
+  const itemOutlook = calculateLocationOutlook(itemSparse, { date, scenario: "typical", locationId: "downtown" });
+  assert.equal(itemOutlook.evidenceQuality, "sparse");
+  assert.deepEqual(itemOutlook.hours, outlookFor("downtown", "typical").outlook.hours, "order baselines are untouched");
+  assert.ok(itemOutlook.notes.some((note) => note.startsWith("Order history is sufficient, but item sales history is sparse")));
+  assert.ok(!itemOutlook.notes.some((note) => note.includes("order history;")));
+  assert.ok(evaluateOffers(itemSparse, itemOutlook).filter((candidate) => candidate.kind === "discount").every((candidate) => candidate.issues.some((issue) => issue.code === "SPARSE_HISTORY")));
+}
+
+// Assumptions name the daypart fallback, cannibalization and the break-even basis.
+for (const phrase of ["daypart", "cannibalization", "Break-even compares against expected units at the regular price"]) {
+  assert.ok(ENGINE_ASSUMPTIONS.some((assumption) => assumption.includes(phrase)), `assumptions mention ${phrase}`);
 }
 
 console.log("✓ engine checks passed");

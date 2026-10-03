@@ -15,7 +15,7 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | --- | --- | --- |
 | Units by location/weekday/hour over comparable weeks; orders computed separately | ✅ | — |
 | Exclude closed periods; identify prior promotions | ✅ | — |
-| Sparse history → **documented daypart fallback** + sample count | ⚠️ falls back to same hour across weekdays/weekends, not dayparts; quality/count come only from order history, so sparse *item* history goes unreported | C6 |
+| Sparse history → **documented daypart fallback** + sample count | ✅ daypart fallback (`DAYPARTS`), weekday/weekend split; quality and count use the worse of order and item history (C6 done) | — |
 | `scenario_units = baseline × (1 + adj)`, bounded, correlated signals deduped | ✅ (`dedupeKey`, clamp) | — |
 | Separate order adjustment for capacity | ✅ | — |
 | Raw demand shown separately from serviceable orders | ✅ | — |
@@ -23,9 +23,9 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Always include regular price; evaluate 5% and 10% | ✅ | — |
 | One predefined bundle **if agreed** | ⚠️ no separate bundle candidate, but since the coffee-shop pivot the default item (Coffee & Pastry Pair) is itself a bundle-category item | C3 (optional) |
 | Contribution, break-even, reject nonpositive before dividing | ✅ | — |
-| Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Keep it, and state it in `ENGINE_ASSUMPTIONS`. | C6 |
+| Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Kept, and stated in `ENGINE_ASSUMPTIONS` (C6 done). | — |
 | Distinguish raw vs serviceable units; compare scenarios consistently | ✅ item units scaled to serviceable orders; response units capped at capacity (C2 done). Raw item units are not exposed: needs a contract field | request to B (optional) |
-| Report missing costs **and substitution/cannibalization limitations** | ⚠️ missing cost flagged only on discount candidates (keep-price with unknown cost carries no issue); cannibalization not reported | C6 |
+| Report missing costs **and substitution/cannibalization limitations** | ✅ `MISSING_COST` is an error on discounts and a warning on keep-price; cannibalization stated in `ENGINE_ASSUMPTIONS` (C6 done) | — |
 | Demand response is explicit low/base/high assumption, no learned elasticity | ✅ low +0%, base 1.5×, high 3× the discount % (C1 done) | — |
 | Cautious trial/no-change when response evidence is missing | ✅ keep-price; trial optional | C4 |
 | Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ (no customer-level inputs exist) | — |
@@ -84,7 +84,7 @@ Changing any export's shape needs Role B's agreement first, since B, A and D all
 | Step | Implementation | Constant |
 | --- | --- | --- |
 | Baseline | Mean of the up to 8 most recent same weekday + hour observations before the planning date, excluding `promotion` hours (an excluded hour is replaced by an older week if one exists, so the span can exceed 8 weeks). Only the location's opening hours are computed. Orders come from `orderTotals`, units from `itemSales`; the two are never mixed. | `COMPARABLE_WEEKS = 8` |
-| Sparse fallback | Fewer than 4 observations → same hour across all weekdays or all weekends, over the whole supplied history. Applied to orders and units alike, but only the order fallback sets `evidenceQuality: "sparse"`; `observationCount` is the smallest order sample across open hours. | `MIN_OBSERVATIONS = 4` |
+| Sparse fallback | Fewer than 4 observations → the average hour of that hour's daypart (`DAYPARTS`: morning open–11, lunch 11–14, afternoon 14–17, dinner 17–close) across all weekdays or all weekends, over the whole supplied history. Applied to orders and units alike; either one sets `evidenceQuality: "sparse"` and a note says which. `observationCount` is the smallest sample across order and item history. | `MIN_OBSERVATIONS = 4` |
 | Context | Signal applies if its location matches and its window overlaps the hour (local tz). Scenario filtering is done by D's loader, not the engine; the engine ignores `scenarioIds`. Records with a zero adjustment are skipped (the holiday fixture is 0/0, so it has no effect). One record per `dedupeKey` (largest absolute value), summed, clamped per hour. Orders and units use separate adjustments; `signalIds`/`appliedSignalIds` list only signals with a nonzero *order* adjustment. | `ADJUSTMENT_BOUNDS = [-0.5, +1.0]` |
 | Capacity | Item `scenarioUnits` in an hour whose orders exceed capacity are scaled by `serviceableOrders / scenarioOrders` (stable units per order). `serviceableOrders = min(scenarioOrders, hourlyCapacityOrders)`; constrained if peak ≥ `policy.capacityWarningShare` × capacity | policy |
 | Classification | constrained, else busy/soft at ±10% vs usual, else typical | `CLASSIFICATION_THRESHOLD = 0.1` |
@@ -99,7 +99,7 @@ Changing any export's shape needs Role B's agreement first, since B, A and D all
 ### Guardrails (`ValidationIssue.code`)
 `DISCOUNT_ABOVE_CEILING`, `INVALID_DISCOUNT`, `NONPOSITIVE_CONTRIBUTION`, `BELOW_MIN_CONTRIBUTION`, `MISSING_COST`, `STALE_COST`, `CLOSED_HOURS`, `INVALID_WINDOW`, `ITEM_NOT_ELIGIBLE`, `OVERLAPPING_OFFER` (all errors). `CAPACITY_CONFLICT` and `SPARSE_HISTORY` are warnings.
 
-Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on every candidate; the rest apply to discount candidates only. `OVERLAPPING_OFFER` matches on location, item and overlapping window. `CAPACITY_CONFLICT` fires when any window hour's scenario orders, lifted by the high response, reach `capacityWarningShare` × capacity.
+Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on every candidate; the rest apply to discount candidates only, except that keep-price with an unknown cost gets `MISSING_COST` as a warning. `OVERLAPPING_OFFER` matches on location, item and overlapping window. `CAPACITY_CONFLICT` fires when any window hour's scenario orders, lifted by the high response, reach `capacityWarningShare` × capacity.
 
 ### Selection
 1. `capacity-peak` → keep price
@@ -113,13 +113,14 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 - The Arena event changes only Arena 16:00–20:00 and isn't double-counted; Arena keeps price, and its discounts are flagged with `CAPACITY_CONFLICT`
 - Every guardrail code except `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning, which no check asserts
 - Capacity cap: Arena event-day units follow serviceable orders and no discount scenario exceeds serviceable units; Downtown's typical-day numbers are asserted unchanged
-- Sparse fallback: `evidenceQuality` is sparse, baselines stay positive, selection keeps price
+- Sparse fallback: daypart averages are used and reported, baselines stay positive, selection keeps price; item-only sparse history is reported separately
+- `MISSING_COST` warning on keep-price
 
 ---
 
 ## 4. Work queue
 
-Order: **C1 (done) → C2 (done) → C6 → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
+Order: **C1 (done) → C2 (done) → C6 (done) → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
 Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
@@ -155,7 +156,7 @@ The bowl fixtures are gone. The default item filter now uses `MenuItem.offerElig
 - **Ask B:** add `reasonCode` + `reasonFacts` (e.g. `{ breakEvenUnits, baseUnits, peakOrders, capacity }`) to `Selection`. Keep `reason` for display.
 - Codes: `CAPACITY_PEAK`, `SPARSE_HISTORY`, `DISCOUNT_CLEARS_BREAK_EVEN`, `NO_DISCOUNT_CLEARS_BREAK_EVEN`, `DEMAND_WITHIN_USUAL`.
 
-### C6. Close remaining design gaps (engine-only)
+### C6. Close remaining design gaps (engine-only) — DONE
 - **Daypart fallback** (design: "documented daypart fallback"). When same-weekday hours are sparse, average across the hour's daypart: lunch 11–14, afternoon 14–17, dinner 17–close. Keep the weekday/weekend split, and document the dayparts in `ENGINE_ASSUMPTIONS`.
 - **Cannibalization note** (design: "Report … substitution/cannibalization limitations"). Add an `ENGINE_ASSUMPTIONS` line saying discount scenarios ignore shifts from other items and other hours.
 - **Check:** sparse test still passes and reports which daypart it used.
