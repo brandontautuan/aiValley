@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { CompetitorResearchEvidence, CompetitorResearchResponse, CompetitorResearchResult } from "../../../contracts/index.ts";
 import { api, ApiRequestError } from "../api.ts";
 import { timestamp } from "../format.ts";
+import { SponsorTag } from "./SponsorTag.tsx";
 
 const STATUS_COPY = {
   completed: "Ready for review",
@@ -97,6 +98,7 @@ export function CompetitorResearchPanel({ locationId, date, compact = false }: {
     <section className={`panel research-panel ${compact ? "compact" : ""}`} aria-labelledby="public-web-research">
       <div className="panel-head">
         <div>
+          <span className="eyebrow"><SponsorTag sponsor="tavily" label="Powered by Tavily" /></span>
           <h2 id="public-web-research">Check public sources</h2>
         </div>
         <button className="ghost" onClick={refresh} disabled={busy}>
@@ -114,7 +116,7 @@ export function CompetitorResearchPanel({ locationId, date, compact = false }: {
           <div className="research-overview">
             <strong>{sourceCount}</strong>
             <span>attributed source{sourceCount === 1 ? "" : "s"}</span>
-            <span className="muted">· {completed.length} configured competitor{completed.length === 1 ? "" : "s"}</span>
+            <span className="muted">· {completed.length} configured competitor{completed.length === 1 ? "" : "s"} · searched live via Tavily</span>
           </div>
           <div className="research-profiles">{data.results.map((result) => <CompetitorProfile key={result.run.id} result={result} />)}</div>
         </div>

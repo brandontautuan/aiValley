@@ -3,6 +3,7 @@ import type { RankedAction, ScenarioId, StrategyRun, TrendEvidence } from "../..
 import { api, ApiRequestError } from "../api.ts";
 import { dateLabel, scenarioLabel, timestamp } from "../format.ts";
 import { useLoad } from "../useLoad.ts";
+import { SponsorTag } from "./SponsorTag.tsx";
 
 const STATUS_LABEL: Record<StrategyRun["status"], string> = {
   researching: "Researching",
@@ -102,6 +103,7 @@ export function Strategy({ date, scenario }: { date: string; scenario: ScenarioI
   return (
     <section className={overview.loading ? "loading" : ""}>
       <div className="page-head">
+        <span className="eyebrow"><SponsorTag sponsor="zoowork" label="Planned with a ZooWork agent" /></span>
         <h1>Multi-day strategy</h1>
         <p className="muted">
           Plan a longer horizon for one location. A run ranks marketing actions around the deterministic daily
@@ -159,8 +161,20 @@ function RunView({ run, busy, error, onRefresh, onApprove }: { run: StrategyRun;
       </div>
       <p className="muted small">
         {run.horizonDays}-day horizon · {run.resolution} resolution
-        {run.zooWorkRunId ? ` · ZooWork ${run.zooWorkRunId}` : ""}
         {run.bandRoomId ? ` · Band ${run.bandRoomId}` : ""}
+      </p>
+      <p className="provenance small">
+        {run.zooWorkRunId ? (
+          <>
+            <SponsorTag sponsor="zoowork" label="ZooWork agent run" />
+            <span className="muted">Run <code>{run.zooWorkRunId}</code> returned the research records below. Only verified records can influence the ranking.</span>
+          </>
+        ) : (
+          <>
+            <span className="tag">Deterministic fallback</span>
+            <span className="muted">No ZooWork agent run is attached to this strategy, so it uses the pricing recommendation and a conservative research fallback.</span>
+          </>
+        )}
       </p>
 
       {inProgress(run.status) && (
@@ -209,7 +223,7 @@ function RunView({ run, busy, error, onRefresh, onApprove }: { run: StrategyRun;
       </ol>
       {run.status === "awaiting_approval" && <p className="muted small">Approving one action saves it for the team and approves any linked daily pricing plan. It does not publish anything.</p>}
 
-      <h3>Research evidence</h3>
+      <h3>Research evidence{run.zooWorkRunId ? <> <SponsorTag sponsor="zoowork" label="collected by ZooWork" /></> : null}</h3>
       {run.evidence.length === 0 ? (
         <p className="muted small">No external research evidence for this run. Ranked actions use the deterministic recommendation only.</p>
       ) : (

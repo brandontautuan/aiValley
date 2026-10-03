@@ -12,7 +12,7 @@ The primary user is a restaurant-chain operator or manager planning the next day
 
 ## Product Purpose
 
-Disney Cafe Daily Planner helps a small coffee-shop chain turn historical orders and local signals into a daily, location-specific revenue plan. Success means an operator can compare forecasts and offers, review the evidence and trade-offs, and save a confident action plan for each store.
+Project Northstar helps a small coffee-shop chain turn historical orders and local signals into a daily, location-specific revenue plan. Success means an operator can compare forecasts and offers, review the evidence and trade-offs, and save a confident action plan for each store.
 
 ## Positioning
 
@@ -41,7 +41,7 @@ The planning workflow is: historical orders and local signals → demand outlook
 
 ## Brand Commitments
 
-The current fictional hackathon demo is named Disney Cafe. It is not a live or monetized café. The interface should be straightforward first, with a consistent, restrained Disney-inspired visual language and brief, smooth interactions.
+The current fictional hackathon demo is named Project Northstar. It is not a live or monetized café. The interface should be straightforward first, with a consistent, restrained visual language and brief, smooth interactions.
 
 ## Product Principles
 

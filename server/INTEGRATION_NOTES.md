@@ -18,7 +18,7 @@ and recommendation rules remain unchanged.
 
 ## Role D — `data/**` and `intelligence/**` — completed for the coffee demo
 
-**Implemented change:** Disney Cafe is the fictional San Francisco
+**Implemented change:** Project Northstar is the fictional San Francisco
 coffee-shop demo chain, with coffee fixtures and coffee-specific fallback copy.
 
 **Fixture expectations:**
@@ -38,7 +38,7 @@ the exact-term and evidence validation already present.
 
 ## Role A — `web/**` — branding and strategy UI completed
 
-Visible branding now uses Disney Cafe. The strategy UI displays the
+Visible branding now uses Project Northstar. The strategy UI displays the
 strategy-run lifecycle, ranked actions, evidence freshness, and manager
 approval boundaries. The location UI also surfaces Tavily results as
 manager-review-only public-web context; evidence promotion remains stretch work.

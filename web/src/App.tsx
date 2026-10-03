@@ -9,6 +9,8 @@ import { ScenarioToggle } from "./components/ScenarioToggle.tsx";
 import { BrandMark } from "./components/BrandMark.tsx";
 import { UiIcon } from "./components/UiIcon.tsx";
 import { Strategy } from "./components/StrategyPanel.tsx";
+import { HowItWorks } from "./components/HowItWorks.tsx";
+import { SponsorFooter } from "./components/SponsorTag.tsx";
 import { Today } from "./components/Today.tsx";
 import { Week } from "./components/Week.tsx";
 import { mockSeedOf, scenarioLabel } from "./format.ts";
@@ -19,12 +21,13 @@ const DEFAULT_DATE = "2026-10-05";
 // The API still rejects unsupported dates from manually edited links or direct requests.
 const EARLIEST_DEMO_DATE = "2026-08-11";
 
-const TABS: Array<{ path: string; label: string; icon: "calendar" | "bookmark" | "grid" | "chart" | "compass"; active: (route: Route) => boolean }> = [
-  { path: "/", label: "Daily planning", icon: "calendar", active: (route) => route.page === "today" || route.page === "location" },
+const TABS: Array<{ path: string; label: string; icon: "calendar" | "bookmark" | "grid" | "chart" | "compass" | "layers"; active: (route: Route) => boolean }> = [
   { path: "/plan", label: "Saved plans", icon: "bookmark", active: (route) => route.page === "plan" },
+  { path: "/", label: "Daily planning", icon: "calendar", active: (route) => route.page === "today" || route.page === "location" },
   { path: "/week", label: "Week outlook", icon: "chart", active: (route) => route.page === "week" },
   { path: "/month", label: "Month calendar", icon: "grid", active: (route) => route.page === "month" },
   { path: "/strategy", label: "Strategy", icon: "compass", active: (route) => route.page === "strategy" },
+  { path: "/how-it-works", label: "How it works", icon: "layers", active: (route) => route.page === "how-it-works" },
 ];
 
 export function App() {
@@ -83,7 +86,6 @@ export function App() {
           <BrandMark className="logo" title={brand.name} />
           <span>
             <strong>{brand.name}</strong>
-            <span className="muted"> {brand.product}</span>
           </span>
         </a>
         <nav className="tabs" aria-label="Main views">
@@ -121,7 +123,9 @@ export function App() {
         {route.page === "location" && <LocationDetail key={route.id} locationId={route.id} date={date} scenario={scenario} />}
         {route.page === "strategy" && <Strategy date={date} scenario={scenario} />}
         {route.page === "plan" && <ActionPlan date={date} scenario={scenario} />}
+        {route.page === "how-it-works" && <HowItWorks params={params} />}
       </main>
+      <SponsorFooter href={hrefFor("/how-it-works", params)} />
     </div>
   );
 }

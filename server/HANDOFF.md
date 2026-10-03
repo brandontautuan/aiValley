@@ -18,7 +18,7 @@
 
 ## Demo name
 Server-side content-agent check fixtures and integration notes use the fictional
-Disney Cafe name. This is a copy-only change; API and revision behavior are unchanged.
+Project Northstar name. This is a copy-only change; API and revision behavior are unchanged.
 
 ## How to run/check
 `npm run dev:server` · `node --experimental-strip-types server/check.ts`

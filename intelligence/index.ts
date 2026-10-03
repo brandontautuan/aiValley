@@ -32,7 +32,7 @@ export interface ContentModel {
   draftSocial(packet: ContentPacket): Promise<Pick<SocialDraft, "caption" | "creativeBrief">>;
 }
 
-export const BRAND_TONE = "Disney Cafe: warm, clear, and lightly storybook-inspired. No hype words, character references, or invented claims.";
+export const BRAND_TONE = "Project Northstar: warm, clear, and lightly storybook-inspired. No hype words, character references, or invented claims.";
 
 const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const formatHour = (hour: number) => {

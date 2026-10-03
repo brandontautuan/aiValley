@@ -24,7 +24,7 @@ const packet: ContentPacket = {
 const draft = await generateSocialDraft(packet);
 assert.equal(draft.revision, 2);
 assert.equal(draft.source, "template");
-assert.ok(draft.caption.includes("$12.60") && draft.caption.includes("Coffee & Pastry Pair") && draft.caption.includes("Disney Cafe Downtown"));
+assert.ok(draft.caption.includes("$12.60") && draft.caption.includes("Coffee & Pastry Pair") && draft.caption.includes("Project Northstar Downtown"));
 assert.deepEqual(validateGeneratedContent(packet, { text: draft.caption }), []);
 
 // Unsupported model numbers or evidence fall back to the template.

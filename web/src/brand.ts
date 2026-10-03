@@ -3,8 +3,7 @@
  * brand (or product type) should only require editing this file.
  */
 export const brand = {
-  name: "Disney Cafe",
-  product: "Daily Planner",
+  name: "Project Northstar",
   tagline: "What should each location do tomorrow, and why?",
   /** Label for an item unit in offer economics (e.g. "break-even units"). */
   itemNoun: { singular: "unit", plural: "units" },
@@ -12,4 +11,4 @@ export const brand = {
     "Demo · Fictional stores and sample data. Sales forecasts are estimates, not guaranteed results.",
 } as const;
 
-export const documentTitle = `${brand.name} ${brand.product}`;
+export const documentTitle = brand.name;

@@ -1,7 +1,7 @@
 # Role D handoff — data and AI content
 
 ## Demo branding update
-- Visible chain name and fallback social captions use Disney Cafe. The chain ID, location/item IDs, fixture economics, and deterministic demand data remain unchanged.
+- Visible chain name and fallback social captions use Project Northstar. The chain ID, location/item IDs, fixture economics, and deterministic demand data remain unchanged.
 - `BRAND_TONE` guides optional model copy toward clear, lightly storybook-inspired language without character references or unsupported claims.
 
 ## Ready interfaces and paths
