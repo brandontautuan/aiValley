@@ -1,10 +1,11 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Recommendation, SavedPlan } from "../contracts/index.ts";
+import type { Recommendation, SavedPlan, StrategyRun } from "../contracts/index.ts";
 
 export interface StoreState {
   recommendations: Record<string, Recommendation>;
   plans: SavedPlan[];
+  strategyRuns: Record<string, StrategyRun>;
 }
 
 export interface Store {
@@ -13,7 +14,7 @@ export interface Store {
   reset(): void;
 }
 
-const empty = (): StoreState => ({ recommendations: {}, plans: [] });
+const empty = (): StoreState => ({ recommendations: {}, plans: [], strategyRuns: {} });
 
 /**
  * Small durable store: one JSON file per local instance (gitignored), written
@@ -23,7 +24,12 @@ export function createFileStore(dataDir: string): Store {
   const file = join(dataDir, "store.json");
   let state: StoreState;
   try {
-    state = JSON.parse(readFileSync(file, "utf8")) as StoreState;
+    const saved = JSON.parse(readFileSync(file, "utf8")) as Partial<StoreState>;
+    state = {
+      recommendations: saved.recommendations ?? {},
+      plans: saved.plans ?? [],
+      strategyRuns: saved.strategyRuns ?? {},
+    };
   } catch {
     state = empty();
   }

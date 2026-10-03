@@ -2,7 +2,9 @@ import {
   CONTRACT_VERSION,
   type ActionPlanResponse,
   type ApiError,
+  type ApproveStrategyRunRequest,
   type ContentRequest,
+  type CreateStrategyRunRequest,
   type CreateRecommendationRequest,
   type DecisionRequest,
   type DecisionResponse,
@@ -17,6 +19,10 @@ import {
   type SavedPlan,
   type ScenarioId,
   type SocialDraft,
+  type StrategyRun,
+  type StrategyRunEvent,
+  type StrategyRunResponse,
+  type TrendEvidence,
 } from "../contracts/index.ts";
 import { DEFAULT_PLANNING_DATE, loadPlanningData } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "../engine/index.ts";
@@ -56,15 +62,34 @@ function parseRevision(value: unknown): number {
   return value as number;
 }
 
+function parseHorizonDays(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 365) {
+    fail(400, "BAD_REQUEST", "horizonDays must be an integer from 1 through 365");
+  }
+  return value as number;
+}
+
 const hourLabel = (candidate: OfferCandidate) => `${candidate.terms.window.startHour}:00–${candidate.terms.window.endHour}:00`;
+
+/** Server-side boundary for ZooWork orchestration and optional Band research rooms. */
+export interface StrategyWorkflow {
+  run(input: {
+    strategyRunId: string;
+    locationId: string;
+    planningDate: string;
+    scenario: ScenarioId;
+    horizonDays: number;
+  }): Promise<{ zooWorkRunId?: string; bandRoomId?: string; evidence: TrendEvidence[] }>;
+}
 
 export interface PlannerOptions {
   store: Store;
   model?: ContentModel;
+  strategyWorkflow?: StrategyWorkflow;
   now?: () => Date;
 }
 
-export function createPlanner({ store, model, now = () => new Date() }: PlannerOptions) {
+export function createPlanner({ store, model, strategyWorkflow, now = () => new Date() }: PlannerOptions) {
   function compute(date: string, scenario: ScenarioId, locationId: string) {
     const data = loadPlanningData({ date, scenario });
     const location = data.locations.find((entry) => entry.id === locationId);
@@ -93,6 +118,66 @@ export function createPlanner({ store, model, now = () => new Date() }: PlannerO
 
   function selectedCandidate(recommendation: Recommendation): OfferCandidate {
     return recommendation.candidates.find((candidate) => candidate.id === recommendation.selectedCandidateId)!;
+  }
+
+  function strategyResolution(horizonDays: number): StrategyRun["resolution"] {
+    return horizonDays <= 7 ? "hourly" : horizonDays <= 90 ? "daily" : "weekly";
+  }
+
+  function strategyEvent(runId: string, index: number, type: StrategyRunEvent["type"], message: string, at: string): StrategyRunEvent {
+    return { id: `${runId}-event-${index}`, at, type, message };
+  }
+
+  function verifiedEvidence(evidence: TrendEvidence[]): TrendEvidence[] {
+    return evidence.filter((entry) => entry.status === "verified");
+  }
+
+  /** Ranked actions use only verified evidence; offer economics always come from Role C. */
+  function rankStrategyActions(recommendation: Recommendation, evidence: TrendEvidence[]): StrategyRun["rankedActions"] {
+    const selected = selectedCandidate(recommendation);
+    const verifiedIds = verifiedEvidence(evidence).map((entry) => entry.id);
+    const promotion = selected.kind === "discount" && selected.valid;
+    const actions: StrategyRun["rankedActions"] = [
+      promotion
+        ? {
+            id: `${recommendation.id}-promotion`,
+            rank: 1,
+            kind: "promotion",
+            title: `Trial ${selected.terms.discountPct}% off ${selected.itemName}`,
+            rationale: `${recommendation.deterministicReason} Review the break-even threshold before approval.`,
+            evidenceIds: verifiedIds,
+            recommendationId: recommendation.id,
+            recommendationRevision: recommendation.revision,
+          }
+        : {
+            id: `${recommendation.id}-hold`,
+            rank: 1,
+            kind: "hold-monitor",
+            title: "Hold price and monitor demand",
+            rationale: recommendation.deterministicReason,
+            evidenceIds: verifiedIds,
+          },
+      {
+        id: `${recommendation.id}-organic`,
+        rank: 2,
+        kind: "organic-campaign",
+        title: "Prepare a local awareness campaign",
+        rationale:
+          verifiedIds.length > 0
+            ? `Use ${verifiedIds.length} verified local research signal${verifiedIds.length === 1 ? "" : "s"} to guide copy; do not state unsupported performance claims.`
+            : "No verified social trend is available yet; use a conservative location-aware message and monitor response.",
+        evidenceIds: verifiedIds,
+      },
+      {
+        id: `${recommendation.id}-monitor`,
+        rank: 3,
+        kind: "hold-monitor",
+        title: "Reassess after the next evidence refresh",
+        rationale: "Keep the current plan under review; research is time-sensitive and does not establish long-term demand or elasticity.",
+        evidenceIds: [],
+      },
+    ];
+    return actions;
   }
 
   function packetFor(recommendation: Recommendation): ContentPacket {
@@ -127,6 +212,93 @@ export function createPlanner({ store, model, now = () => new Date() }: PlannerO
     });
     if (stale) fail(409, "STALE_REVISION", "Terms changed while content was generating; regenerate for the current revision.", { retryable: true });
     return state.recommendations[id];
+  }
+
+  /** Creates the draft for a location/date/scenario, or returns the existing one. */
+  function createRecommendationDraft(body: Partial<CreateRecommendationRequest>): Recommendation {
+    const date = parseDate(body.date);
+    const scenario = parseScenario(body.scenario);
+    if (typeof body.locationId !== "string") return fail(400, "BAD_REQUEST", "locationId is required");
+    const id = `rec-${body.locationId}-${date}-${scenario}`;
+    const existing = store.read().recommendations[id];
+    if (existing) return existing;
+
+    const { data, outlook } = compute(date, scenario, body.locationId);
+    const candidates = evaluateOffers(data, outlook, undefined, approvedOffers(id, date));
+    const selection = selectRecommendedCandidate(candidates, outlook);
+    const timestamp = now().toISOString();
+    const recommendation: Recommendation = {
+      id,
+      revision: 1,
+      locationId: body.locationId,
+      planningDate: date,
+      scenario,
+      status: "draft",
+      candidates,
+      selectedCandidateId: selection.selectedCandidateId,
+      deterministicReason: selection.reason,
+      evidenceIds: [
+        ...data.contextSignals.filter((signal) => outlook.appliedSignalIds.includes(signal.id)).map((signal) => signal.id),
+        ...data.competitorOffers.filter((offer) => offer.locationId === body.locationId).map((offer) => offer.id),
+      ],
+      assumptions: ENGINE_ASSUMPTIONS,
+      explanation: null,
+      socialDraft: null,
+      staleContent: [],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    return store.write((state) => {
+      state.recommendations[id] = recommendation;
+    }).recommendations[id];
+  }
+
+  /** Revalidates and saves a decision. Approving the same revision twice is idempotent. */
+  function decideRecommendation(id: string, body: Partial<DecisionRequest>): DecisionResponse {
+    const recommendation = getRecommendation(id);
+    requireRevision(recommendation, parseRevision(body.expectedRevision));
+    if (body.action !== "approve" && body.action !== "dismiss") return fail(400, "BAD_REQUEST", "action must be approve or dismiss");
+    const planId = `plan-${id}-r${recommendation.revision}`;
+
+    if (body.action === "dismiss") {
+      const state = store.write((draft) => {
+        draft.recommendations[id].status = "dismissed";
+        draft.recommendations[id].updatedAt = now().toISOString();
+        for (const plan of draft.plans) if (plan.recommendationId === id) plan.superseded = true;
+      });
+      return { recommendation: state.recommendations[id], plan: null };
+    }
+
+    const existingPlan = store.read().plans.find((plan) => plan.id === planId && !plan.superseded);
+    if (existingPlan) return { recommendation, plan: existingPlan };
+
+    const { data, location, outlook } = compute(recommendation.planningDate, recommendation.scenario, recommendation.locationId);
+    const current = selectedCandidate(recommendation);
+    const revalidated = evaluateOffers(data, outlook, current.terms, approvedOffers(id, recommendation.planningDate)).at(-1)!;
+    if (!revalidated.valid) {
+      fail(422, "VALIDATION_FAILED", "These terms no longer pass the guardrails.", { issues: revalidated.issues.filter((issue) => issue.severity === "error") });
+    }
+    const plan: SavedPlan = {
+      id: planId,
+      recommendationId: id,
+      revision: recommendation.revision,
+      locationId: location.id,
+      locationName: location.name,
+      planningDate: recommendation.planningDate,
+      scenario: recommendation.scenario,
+      finalTerms: revalidated,
+      socialDraft: recommendation.socialDraft?.revision === recommendation.revision ? recommendation.socialDraft : null,
+      decidedAt: now().toISOString(),
+      superseded: false,
+    };
+    const state = store.write((draft) => {
+      draft.recommendations[id].status = "approved";
+      draft.recommendations[id].updatedAt = plan.decidedAt;
+      draft.plans = draft.plans.filter((entry) => entry.id !== planId);
+      for (const entry of draft.plans) if (entry.recommendationId === id) entry.superseded = true;
+      draft.plans.push(plan);
+    });
+    return { recommendation: state.recommendations[id], plan };
   }
 
   return {
@@ -178,43 +350,124 @@ export function createPlanner({ store, model, now = () => new Date() }: PlannerO
       };
     },
 
-    /** Creates the draft for a location/date/scenario, or returns the existing one. */
-    createRecommendation(body: Partial<CreateRecommendationRequest>): Recommendation {
+    createRecommendation: createRecommendationDraft,
+
+    /** Creates a durable, approval-gated strategy run around the existing offer recommendation. */
+    async createStrategyRun(body: Partial<CreateStrategyRunRequest>): Promise<StrategyRunResponse> {
       const date = parseDate(body.date);
       const scenario = parseScenario(body.scenario);
-      if (typeof body.locationId !== "string") return fail(400, "BAD_REQUEST", "locationId is required");
-      const id = `rec-${body.locationId}-${date}-${scenario}`;
-      const existing = store.read().recommendations[id];
-      if (existing) return existing;
+      if (typeof body.locationId !== "string") fail(400, "BAD_REQUEST", "locationId is required");
+      const horizonDays = parseHorizonDays(body.horizonDays);
+      // Verifies the location through the same data boundary as recommendations.
+      compute(date, scenario, body.locationId);
+      const id = `strategy-${body.locationId}-${date}-${scenario}-${horizonDays}`;
+      const existing = store.read().strategyRuns[id];
+      if (existing) return { contractVersion: CONTRACT_VERSION, strategyRun: existing };
 
-      const { data, outlook } = compute(date, scenario, body.locationId);
-      const candidates = evaluateOffers(data, outlook, undefined, approvedOffers(id, date));
-      const selection = selectRecommendedCandidate(candidates, outlook);
       const timestamp = now().toISOString();
-      const recommendation: Recommendation = {
+      const initial: StrategyRun = {
         id,
         revision: 1,
         locationId: body.locationId,
         planningDate: date,
         scenario,
-        status: "draft",
-        candidates,
-        selectedCandidateId: selection.selectedCandidateId,
-        deterministicReason: selection.reason,
-        evidenceIds: [
-          ...data.contextSignals.filter((signal) => outlook.appliedSignalIds.includes(signal.id)).map((signal) => signal.id),
-          ...data.competitorOffers.filter((offer) => offer.locationId === body.locationId).map((offer) => offer.id),
+        horizonDays,
+        resolution: strategyResolution(horizonDays),
+        status: "researching",
+        evidence: [],
+        rankedActions: [],
+        approvedActionId: null,
+        events: [
+          strategyEvent(id, 1, "created", `Strategy run created for a ${horizonDays}-day planning horizon.`, timestamp),
+          strategyEvent(id, 2, "workflow-started", "Requested research and strategy orchestration.", timestamp),
         ],
-        assumptions: ENGINE_ASSUMPTIONS,
-        explanation: null,
-        socialDraft: null,
-        staleContent: [],
         createdAt: timestamp,
         updatedAt: timestamp,
       };
-      return store.write((state) => {
-        state.recommendations[id] = recommendation;
-      }).recommendations[id];
+      store.write((state) => {
+        state.strategyRuns[id] = initial;
+      });
+
+      const recommendation = createRecommendationDraft({ date, scenario, locationId: body.locationId });
+      let evidence: TrendEvidence[] = [];
+      let zooWorkRunId: string | undefined;
+      let bandRoomId: string | undefined;
+      let fallbackMessage = "No strategy workflow is configured; ranked the deterministic recommendation with a conservative research fallback.";
+
+      if (strategyWorkflow) {
+        try {
+          const result = await strategyWorkflow.run({ strategyRunId: id, locationId: body.locationId, planningDate: date, scenario, horizonDays });
+          zooWorkRunId = result.zooWorkRunId;
+          bandRoomId = result.bandRoomId;
+          evidence = result.evidence.filter(
+            (entry) =>
+              typeof entry.id === "string" &&
+              typeof entry.sourceUrl === "string" &&
+              typeof entry.sourceTitle === "string" &&
+              typeof entry.claim === "string" &&
+              Array.isArray(entry.limitations),
+          );
+          fallbackMessage = "Workflow returned research evidence; only verified records informed ranked actions.";
+        } catch {
+          fallbackMessage = "Strategy workflow was unavailable; retained the deterministic recommendation and a conservative research fallback.";
+        }
+      }
+
+      const completedAt = now().toISOString();
+      const state = store.write((draft) => {
+        const run = draft.strategyRuns[id];
+        run.status = "awaiting_approval";
+        run.zooWorkRunId = zooWorkRunId;
+        run.bandRoomId = bandRoomId;
+        run.evidence = evidence;
+        run.rankedActions = rankStrategyActions(recommendation, evidence);
+        run.events.push(
+          strategyEvent(id, 3, evidence.length > 0 ? "evidence-received" : "workflow-fallback", fallbackMessage, completedAt),
+          strategyEvent(id, 4, "ranked", "Ranked actions are ready for manager review.", completedAt),
+        );
+        run.updatedAt = completedAt;
+      });
+      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] };
+    },
+
+    getStrategyRun(id: string): StrategyRunResponse {
+      const strategyRun = store.read().strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`);
+      return { contractVersion: CONTRACT_VERSION, strategyRun };
+    },
+
+    /** Approves one ranked action and revalidates any linked pricing recommendation. */
+    approveStrategyRun(id: string, body: Partial<ApproveStrategyRunRequest>): StrategyRunResponse {
+      const run = store.read().strategyRuns[id] ?? fail(404, "NOT_FOUND", `Unknown strategy run ${id}`);
+      const expectedRevision = parseRevision(body.expectedRevision);
+      if (run.revision !== expectedRevision) {
+        fail(409, "STALE_REVISION", `Strategy run is at revision ${run.revision}, not ${expectedRevision}. Reload and retry.`, { retryable: true });
+      }
+      if (typeof body.actionId !== "string") fail(400, "BAD_REQUEST", "actionId is required");
+      const action = run.rankedActions.find((entry) => entry.id === body.actionId);
+      if (!action) fail(400, "BAD_REQUEST", "actionId is not part of this strategy run");
+      if (run.status === "approved") {
+        if (run.approvedActionId === action.id) return { contractVersion: CONTRACT_VERSION, strategyRun: run };
+        fail(409, "STALE_REVISION", "A different action has already been approved for this strategy run.", { retryable: true });
+      }
+      if (run.status !== "awaiting_approval") fail(409, "STALE_REVISION", "Strategy run is not ready for approval.", { retryable: true });
+
+      if (action.recommendationId) {
+        const recommendation = getRecommendation(action.recommendationId);
+        if (recommendation.revision !== action.recommendationRevision) {
+          fail(409, "STALE_REVISION", "The linked offer changed after this strategy was ranked. Create a new strategy run.", { retryable: true });
+        }
+        decideRecommendation(recommendation.id, { expectedRevision: recommendation.revision, action: "approve" });
+      }
+
+      const approvedAt = now().toISOString();
+      const state = store.write((draft) => {
+        const current = draft.strategyRuns[id];
+        current.status = "approved";
+        current.approvedActionId = action.id;
+        current.events.push(strategyEvent(id, current.events.length + 1, "approved", `Manager approved: ${action.title}.`, approvedAt));
+        current.updatedAt = approvedAt;
+      });
+      return { contractVersion: CONTRACT_VERSION, strategyRun: state.strategyRuns[id] };
     },
 
     getRecommendation,
@@ -261,53 +514,7 @@ export function createPlanner({ store, model, now = () => new Date() }: PlannerO
       return attachContent(id, draft, "socialDraft");
     },
 
-    /** Revalidates and saves a decision. Approving the same revision twice is idempotent. */
-    decide(id: string, body: Partial<DecisionRequest>): DecisionResponse {
-      const recommendation = getRecommendation(id);
-      requireRevision(recommendation, parseRevision(body.expectedRevision));
-      if (body.action !== "approve" && body.action !== "dismiss") return fail(400, "BAD_REQUEST", "action must be approve or dismiss");
-      const planId = `plan-${id}-r${recommendation.revision}`;
-
-      if (body.action === "dismiss") {
-        const state = store.write((draft) => {
-          draft.recommendations[id].status = "dismissed";
-          draft.recommendations[id].updatedAt = now().toISOString();
-          for (const plan of draft.plans) if (plan.recommendationId === id) plan.superseded = true;
-        });
-        return { recommendation: state.recommendations[id], plan: null };
-      }
-
-      const existingPlan = store.read().plans.find((plan) => plan.id === planId && !plan.superseded);
-      if (existingPlan) return { recommendation, plan: existingPlan };
-
-      const { data, location, outlook } = compute(recommendation.planningDate, recommendation.scenario, recommendation.locationId);
-      const current = selectedCandidate(recommendation);
-      const revalidated = evaluateOffers(data, outlook, current.terms, approvedOffers(id, recommendation.planningDate)).at(-1)!;
-      if (!revalidated.valid) {
-        fail(422, "VALIDATION_FAILED", "These terms no longer pass the guardrails.", { issues: revalidated.issues.filter((issue) => issue.severity === "error") });
-      }
-      const plan: SavedPlan = {
-        id: planId,
-        recommendationId: id,
-        revision: recommendation.revision,
-        locationId: location.id,
-        locationName: location.name,
-        planningDate: recommendation.planningDate,
-        scenario: recommendation.scenario,
-        finalTerms: revalidated,
-        socialDraft: recommendation.socialDraft?.revision === recommendation.revision ? recommendation.socialDraft : null,
-        decidedAt: now().toISOString(),
-        superseded: false,
-      };
-      const state = store.write((draft) => {
-        draft.recommendations[id].status = "approved";
-        draft.recommendations[id].updatedAt = plan.decidedAt;
-        draft.plans = draft.plans.filter((entry) => entry.id !== planId);
-        for (const entry of draft.plans) if (entry.recommendationId === id) entry.superseded = true;
-        draft.plans.push(plan);
-      });
-      return { recommendation: state.recommendations[id], plan };
-    },
+    decide: decideRecommendation,
 
     actionPlan(query: { date?: unknown }): ActionPlanResponse {
       const date = parseDate(query.date);

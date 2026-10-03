@@ -3,16 +3,19 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
-import type { ActionPlanResponse, DecisionResponse, LocationOutlookResponse, OverviewResponse, Recommendation } from "../contracts/index.ts";
+import type { ActionPlanResponse, DecisionResponse, LocationOutlookResponse, OverviewResponse, Recommendation, StrategyRunResponse } from "../contracts/index.ts";
 import { createApp } from "./index.ts";
-import { createPlanner } from "./planner.ts";
+import { createPlanner, type PlannerOptions } from "./planner.ts";
 import { createFileStore } from "./store.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "planner-check-"));
 const date = "2026-10-05";
 
-async function withServer<T>(run: (call: <R>(method: string, path: string, body?: unknown) => Promise<{ status: number; json: R }>) => Promise<T>): Promise<T> {
-  const server = createApp(createPlanner({ store: createFileStore(dataDir) })).listen(0);
+async function withServer<T>(
+  run: (call: <R>(method: string, path: string, body?: unknown) => Promise<{ status: number; json: R }>) => Promise<T>,
+  options: Omit<PlannerOptions, "store"> = {},
+): Promise<T> {
+  const server = createApp(createPlanner({ store: createFileStore(dataDir), ...options })).listen(0);
   await new Promise((done) => server.once("listening", done));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
@@ -84,7 +87,74 @@ try {
     assert.equal((await call("POST", "/api/demo/reset")).status, 200);
     assert.equal((await call<ActionPlanResponse>("GET", `/api/action-plan?date=${date}`)).json.plans.length, 0);
     assert.equal((await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json.revision, 1, "reset restores the starting state");
+
+    const strategy = await call<StrategyRunResponse>("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 7 });
+    assert.equal(strategy.status, 200);
+    assert.equal(strategy.json.strategyRun.status, "awaiting_approval");
+    assert.equal(strategy.json.strategyRun.resolution, "hourly");
+    assert.equal(strategy.json.strategyRun.evidence.length, 0);
+    assert.equal(strategy.json.strategyRun.events.at(-2)?.type, "workflow-fallback");
+    const promotion = strategy.json.strategyRun.rankedActions.find((action) => action.kind === "promotion");
+    assert.ok(promotion, "downtown strategy keeps the deterministic promotion candidate");
+
+    const longStrategy = await call<StrategyRunResponse>("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 365 });
+    assert.equal(longStrategy.status, 200);
+    assert.equal(longStrategy.json.strategyRun.resolution, "weekly");
+    assert.equal((await call("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 0 })).status, 400);
+
+    const staleStrategy = await call("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 0, actionId: promotion.id });
+    assert.equal(staleStrategy.status, 409);
+    const approvedStrategy = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: promotion.id });
+    assert.equal(approvedStrategy.status, 200);
+    assert.equal(approvedStrategy.json.strategyRun.status, "approved");
+    const approvedAgain = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: promotion.id });
+    assert.equal(approvedAgain.status, 200, "strategy approval is idempotent");
   });
+
+  await withServer(
+    async (call) => {
+      assert.equal((await call("POST", "/api/demo/reset")).status, 200);
+      const strategy = await call<StrategyRunResponse>("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 3 });
+      assert.equal(strategy.status, 200);
+      assert.equal(strategy.json.strategyRun.zooWorkRunId, "zoo-demo-run");
+      assert.equal(strategy.json.strategyRun.bandRoomId, "band-demo-room");
+      assert.equal(strategy.json.strategyRun.events.at(-2)?.type, "evidence-received");
+      const organic = strategy.json.strategyRun.rankedActions.find((action) => action.kind === "organic-campaign")!;
+      assert.deepEqual(organic.evidenceIds, ["trend-verified"], "unreviewed evidence cannot influence ranked actions");
+    },
+    {
+      strategyWorkflow: {
+        async run() {
+          return {
+            zooWorkRunId: "zoo-demo-run",
+            bandRoomId: "band-demo-room",
+            evidence: [
+              {
+                id: "trend-verified",
+                sourceUrl: "https://example.com/verified",
+                sourceTitle: "Verified local signal",
+                retrievedAt: "2026-10-03T12:00:00Z",
+                claim: "Public discussion describes a nearby cafe as a study destination.",
+                locationRelevance: "San Francisco",
+                status: "verified",
+                limitations: ["Demo evidence only."],
+              },
+              {
+                id: "trend-unreviewed",
+                sourceUrl: "https://example.com/unreviewed",
+                sourceTitle: "Unreviewed local signal",
+                retrievedAt: "2026-10-03T12:00:00Z",
+                claim: "Unreviewed claim.",
+                locationRelevance: "San Francisco",
+                status: "needs_review",
+                limitations: ["Manager review required."],
+              },
+            ],
+          };
+        },
+      },
+    },
+  );
   console.log("✓ server workflow checks passed");
 } finally {
   rmSync(dataDir, { recursive: true, force: true });

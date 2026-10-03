@@ -21,6 +21,9 @@ const routes: Array<[method: string, pattern: RegExp, handler: Handler]> = [
   ["POST", /^\/api\/recommendations\/([\w-]+)\/explanation$/, (planner, [id], _query, body) => planner.explain(id, body as object)],
   ["POST", /^\/api\/recommendations\/([\w-]+)\/social-draft$/, (planner, [id], _query, body) => planner.socialDraft(id, body as object)],
   ["POST", /^\/api\/recommendations\/([\w-]+)\/decision$/, (planner, [id], _query, body) => planner.decide(id, body as object)],
+  ["POST", /^\/api\/strategy-runs$/, (planner, _params, _query, body) => planner.createStrategyRun(body as object)],
+  ["GET", /^\/api\/strategy-runs\/([\w-]+)$/, (planner, [id]) => planner.getStrategyRun(id)],
+  ["POST", /^\/api\/strategy-runs\/([\w-]+)\/approve$/, (planner, [id], _query, body) => planner.approveStrategyRun(id, body as object)],
   ["GET", /^\/api\/action-plan$/, (planner, _params, query) => planner.actionPlan(query)],
   ["POST", /^\/api\/demo\/reset$/, (planner) => planner.reset()],
   [

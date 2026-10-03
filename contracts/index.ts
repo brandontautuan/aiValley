@@ -319,6 +319,63 @@ export interface SavedPlan {
   superseded: boolean;
 }
 
+// ---------- Strategy runs (orchestrated by Role B) ----------
+
+export type StrategyRunStatus = "researching" | "drafting" | "awaiting_approval" | "approved" | "failed";
+export type StrategyResolution = "hourly" | "daily" | "weekly";
+export type TrendEvidenceStatus = "verified" | "needs_review" | "rejected";
+
+/** Bounded, attributable research output. Raw media and comment collections are not persisted here. */
+export interface TrendEvidence {
+  id: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  retrievedAt: string;
+  publishedAt?: string;
+  claim: string;
+  locationRelevance: string;
+  status: TrendEvidenceStatus;
+  limitations: string[];
+}
+
+export interface RankedAction {
+  id: string;
+  rank: number;
+  kind: "organic-campaign" | "promotion" | "hold-monitor";
+  title: string;
+  rationale: string;
+  evidenceIds: string[];
+  /** Present only when this action depends on a current deterministic offer. */
+  recommendationId?: string;
+  recommendationRevision?: number;
+}
+
+export interface StrategyRunEvent {
+  id: string;
+  at: string;
+  type: "created" | "workflow-started" | "evidence-received" | "ranked" | "workflow-fallback" | "approved";
+  message: string;
+}
+
+export interface StrategyRun {
+  id: string;
+  revision: number;
+  locationId: string;
+  planningDate: string;
+  scenario: ScenarioId;
+  horizonDays: number;
+  resolution: StrategyResolution;
+  status: StrategyRunStatus;
+  zooWorkRunId?: string;
+  bandRoomId?: string;
+  evidence: TrendEvidence[];
+  rankedActions: RankedAction[];
+  approvedActionId: string | null;
+  events: StrategyRunEvent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ---------- API payloads (Role B) ----------
 
 export interface LocationSummary {
@@ -382,12 +439,31 @@ export interface ActionPlanResponse {
   plans: SavedPlan[];
 }
 
+export interface CreateStrategyRunRequest {
+  date: string;
+  scenario: ScenarioId;
+  locationId: string;
+  /** One to 365 days, inclusive. */
+  horizonDays: number;
+}
+
+export interface ApproveStrategyRunRequest {
+  expectedRevision: number;
+  actionId: string;
+}
+
+export interface StrategyRunResponse {
+  contractVersion: number;
+  strategyRun: StrategyRun;
+}
+
 export interface ApiError {
   code:
     | "NOT_FOUND"
     | "BAD_REQUEST"
     | "STALE_REVISION"
     | "VALIDATION_FAILED"
+    | "WORKFLOW_FAILED"
     | "FEATURE_UNAVAILABLE"
     | "INTERNAL";
   message: string;
