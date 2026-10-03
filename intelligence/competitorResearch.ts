@@ -18,6 +18,8 @@ export type ObservationStatus =
 export interface CompetitorProfile {
   id: string;
   name: string;
+  /** Official hostnames only; results outside these hosts are discarded. */
+  officialDomains: string[];
   locationAliases: string[];
 }
 
@@ -35,6 +37,8 @@ export interface TavilyResearchRequest {
   /** The provider integration must treat the prompt as instructions, not web content. */
   instructions: string;
   maxSources: number;
+  /** Optional provider-side allowlist for primary-source research. */
+  allowedDomains: string[];
 }
 
 /**
@@ -143,6 +147,14 @@ function assertInput(input: StartCompetitorResearchInput): void {
   for (const competitor of input.competitors) {
     requireText(competitor.id, "competitor.id");
     requireText(competitor.name, "competitor.name");
+    if (competitor.officialDomains.length === 0) {
+      throw new Error(`competitor ${competitor.id} requires at least one official domain`);
+    }
+    for (const domain of competitor.officialDomains) {
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+        throw new Error(`competitor ${competitor.id} has an invalid official domain`);
+      }
+    }
     if (competitor.locationAliases.length === 0) {
       throw new Error(`competitor ${competitor.id} requires at least one configured location alias`);
     }
@@ -175,6 +187,7 @@ export function createTavilyResearchRequest(
       "Do not search for personal data or bypass access controls.",
     ].join(" "),
     maxSources: MAX_SOURCES,
+    allowedDomains: [...new Set(input.competitors.flatMap((competitor) => competitor.officialDomains.map((domain) => domain.toLowerCase())))],
   };
 }
 

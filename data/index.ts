@@ -16,6 +16,7 @@ import {
 } from "./fixtures.ts";
 
 export { DEFAULT_PLANNING_DATE, FIXTURE_LABEL } from "./fixtures.ts";
+export { SF_COMPETITOR_PROFILES } from "./fixtures.ts";
 
 export const SCENARIOS: Array<{ id: ScenarioId; label: string }> = [
   { id: "typical", label: "Typical day" },

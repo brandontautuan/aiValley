@@ -1,4 +1,5 @@
 import type { Chain, CompetitorOffer, ContextSignal, Location, MenuItem } from "../contracts/index.ts";
+import type { CompetitorProfile } from "../intelligence/competitorResearch.ts";
 
 /** Fictional demo chain. Nothing here is live restaurant, event or competitor data. */
 export const FIXTURE_LABEL = "Demo fixtures — fictional chain, events and competitors; not live data";
@@ -59,6 +60,28 @@ export const LOCATIONS: Location[] = [
     profile: "Neighborhood store: steady evenings, family orders on weekends.",
   },
 ];
+
+/**
+ * SF pilot research configuration. These are named public businesses and their
+ * primary domains, not fixture offers and not evidence that a current price or
+ * promotion exists. A research result still requires manager review.
+ */
+export const SF_COMPETITOR_PROFILES: Record<string, CompetitorProfile[]> = {
+  downtown: [
+    { id: "sweetgreen-soma", name: "sweetgreen SoMa", officialDomains: ["sweetgreen.com"], locationAliases: ["171 2nd St, San Francisco, CA 94105", "SoMa"] },
+    { id: "mixt-one-market", name: "MIXT One Market", officialDomains: ["mixt.com"], locationAliases: ["70 Mission St, San Francisco, CA 94105", "FiDi"] },
+    { id: "proper-food-fidi", name: "Proper Food FiDi", officialDomains: ["properfood.com"], locationAliases: ["555 California St, San Francisco, CA 94104", "FiDi"] },
+  ],
+  arena: [
+    { id: "sweetgreen-mission-rock", name: "sweetgreen Mission Rock", officialDomains: ["sweetgreen.com"], locationAliases: ["1023 3rd St, San Francisco, CA 94158", "Mission Bay"] },
+    { id: "proper-food-mission-bay", name: "Proper Food Mission Bay", officialDomains: ["properfood.com"], locationAliases: ["588 Mission Bay Blvd N, San Francisco, CA 94158", "Mission Bay"] },
+    { id: "souvla-dogpatch", name: "Souvla Dogpatch", officialDomains: ["souvla.com"], locationAliases: ["2505 3rd St, San Francisco, CA 94107", "Dogpatch"] },
+  ],
+  residential: [
+    { id: "mixt-valencia", name: "MIXT Mission / Valencia", officialDomains: ["mixt.com"], locationAliases: ["901 Valencia St, San Francisco, CA 94110", "Mission District"] },
+    { id: "souvla-mission", name: "Souvla The Mission", officialDomains: ["souvla.com"], locationAliases: ["758 Valencia St, San Francisco, CA 94110", "Mission District"] },
+  ],
+};
 
 const ALL = LOCATIONS.map((location) => location.id);
 

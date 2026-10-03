@@ -25,6 +25,16 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function isAllowedSource(url: string, allowedDomains: string[]): boolean {
+  if (allowedDomains.length === 0) return true;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return allowedDomains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Creates a bounded Search API adapter. It returns undefined when no key is
  * configured, allowing the caller to keep fixture-based planning available.
@@ -45,6 +55,7 @@ export function createTavilySearchTransport(options: TavilySearchTransportOption
           search_depth: "advanced",
           chunks_per_source: 3,
           max_results: request.maxSources,
+          include_domains: request.allowedDomains,
           include_answer: false,
           include_raw_content: false,
           include_published_date: true,
@@ -63,6 +74,7 @@ export function createTavilySearchTransport(options: TavilySearchTransportOption
             const title = text(record.title);
             const claimText = text(record.content);
             if (!url || !title || !claimText) return [];
+            if (!isAllowedSource(url, request.allowedDomains)) return [];
             return [{
               url,
               title,

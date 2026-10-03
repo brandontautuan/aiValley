@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { loadPlanningData } from "../data/index.ts";
+import { loadPlanningData, SF_COMPETITOR_PROFILES } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers } from "../engine/index.ts";
 import { BRAND_TONE, createTavilySearchTransport, generateExplanation, generateSocialDraft, normalizeRetrievedSource, searchCompetitorOffers, startCompetitorResearch, validateGeneratedContent, type ContentModel, type ContentPacket } from "./index.ts";
 
@@ -40,9 +40,9 @@ const explanation = await generateExplanation(packet);
 assert.ok(explanation.evidenceIds.every((id) => packet.contextSignals.some((s) => s.id === id) || packet.competitorOffers.some((o) => o.id === id)));
 
 // Tavily boundary: no transport → unavailable, never blocking.
-const run = await startCompetitorResearch({ locationId: "downtown", locationName: "Downtown", planningDate: date, competitors: [{ id: "greenleaf", name: "Greenleaf Bowls", locationAliases: ["Downtown"] }] }, undefined);
+const run = await startCompetitorResearch({ locationId: "downtown", locationName: "Downtown, San Francisco", planningDate: date, competitors: SF_COMPETITOR_PROFILES.downtown.slice(0, 1) }, undefined);
 assert.equal(run.status, "unavailable");
-const evidence = normalizeRetrievedSource(run, "greenleaf", { url: "https://example.com/menu", title: "Menu", retrievedAt: "2026-10-03T12:00:00Z", claimText: "Afternoon bowls" });
+const evidence = normalizeRetrievedSource(run, "sweetgreen-soma", { url: "https://example.com/menu", title: "Menu", retrievedAt: "2026-10-03T12:00:00Z", claimText: "Afternoon bowls" });
 assert.equal(evidence.observationStatus, "needs_review");
 assert.equal(evidence.priceCents, null);
 
@@ -52,16 +52,16 @@ const transport = createTavilySearchTransport({
   now: () => new Date("2026-10-03T12:00:00Z"),
   fetchImplementation: async () => new Response(JSON.stringify({
     request_id: "tavily-check",
-    results: [{ url: "https://example.com/official-menu", title: "Official menu", content: "A source-backed menu snippet", published_date: "2026-10-01T00:00:00Z" }],
+    results: [{ url: "https://www.sweetgreen.com/menu", title: "Official menu", content: "A source-backed menu snippet", published_date: "2026-10-01T00:00:00Z" }],
   }), { status: 200 }),
 });
 const batch = await searchCompetitorOffers(
-  { locationId: "downtown", locationName: "Downtown", planningDate: date, competitors: [{ id: "greenleaf", name: "Greenleaf Bowls", locationAliases: ["Downtown"] }] },
+  { locationId: "downtown", locationName: "Downtown, San Francisco", planningDate: date, competitors: SF_COMPETITOR_PROFILES.downtown.slice(0, 1) },
   transport,
   new Date("2026-10-03T12:00:00Z"),
 );
 assert.equal(batch.results[0].run.status, "completed");
-assert.equal(batch.results[0].evidence[0].sourceUrl, "https://example.com/official-menu");
+assert.equal(batch.results[0].evidence[0].sourceUrl, "https://www.sweetgreen.com/menu");
 assert.equal(batch.results[0].evidence[0].priceCents, null);
 
 console.log("✓ intelligence checks passed");
