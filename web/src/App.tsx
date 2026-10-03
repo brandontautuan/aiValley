@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ScenarioId } from "../../contracts/index.ts";
 import { api } from "./api.ts";
+import { brand } from "./brand.ts";
 import { ActionPlan } from "./components/ActionPlan.tsx";
 import { LocationDetail } from "./components/LocationDetail.tsx";
 import { Overview } from "./components/Overview.tsx";
@@ -50,10 +51,10 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo" aria-hidden>◐</span>
+          <span className="logo" aria-hidden>{brand.logoGlyph}</span>
           <div>
-            <strong>Harborline Coffee</strong>
-            <span className="muted"> Revenue Planner</span>
+            <strong>{brand.name}</strong>
+            <span className="muted"> {brand.product}</span>
           </div>
         </div>
         <nav className="tabs">
@@ -76,7 +77,7 @@ export function App() {
           <button className="ghost" onClick={resetDemo}>Reset demo</button>
         </div>
       </header>
-      <div className="fixture-banner">Demo data: a fictional chain with fixture sales, events and competitors. Forecasts and demand responses are estimates, not measured results.</div>
+      <div className="fixture-banner">{brand.fixtureNotice}</div>
       <main key={epoch}>
         {route.page === "overview" && <Overview date={date} scenario={scenario} />}
         {route.page === "location" && <LocationDetail locationId={route.id} date={date} scenario={scenario} />}

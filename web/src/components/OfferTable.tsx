@@ -1,4 +1,5 @@
 import type { OfferTerms, Recommendation } from "../../../contracts/index.ts";
+import { brand } from "../brand.ts";
 import { money, units, windowLabel } from "../format.ts";
 
 /** Side-by-side candidate economics, exactly as computed by the server. */
@@ -18,7 +19,7 @@ export function OfferTable({ recommendation, disabled, onUse }: { recommendation
               <th>Price</th>
               <th>Contribution / unit</th>
               <th>Expected at regular price</th>
-              <th>Break-even units</th>
+              <th>Break-even {brand.itemNoun.plural}</th>
               <th>Assumed response (low / base / high)</th>
               <th>Checks</th>
               <th />
@@ -41,7 +42,7 @@ export function OfferTable({ recommendation, disabled, onUse }: { recommendation
                   </td>
                   <td>{money(candidate.contributionPerUnitCents)}</td>
                   <td>
-                    {units(candidate.referenceUnits)} units
+                    {units(candidate.referenceUnits)} {brand.itemNoun.plural}
                     <div className="muted small">{money(candidate.referenceContributionCents)} contribution</div>
                   </td>
                   <td>{candidate.breakEvenUnits ?? "—"}</td>

@@ -1,4 +1,5 @@
 import { api } from "../api.ts";
+import { brand } from "../brand.ts";
 import { dateLabel, money, timestamp, windowLabel } from "../format.ts";
 import { useLoad } from "../useLoad.ts";
 
@@ -40,7 +41,7 @@ export function ActionPlan({ date }: { date: string }) {
                 <br />
                 <span className="muted small">
                   {windowLabel(terms.terms.window)} · {plan.scenario === "local-event" ? "Local event day" : "Typical day"}
-                  {terms.breakEvenUnits !== null && ` · break-even ${terms.breakEvenUnits} units`}
+                  {terms.breakEvenUnits !== null && ` · break-even ${terms.breakEvenUnits} ${brand.itemNoun.plural}`}
                 </span>
               </p>
               {plan.socialDraft ? <blockquote className="caption small">{plan.socialDraft.caption}</blockquote> : <p className="muted small">No social copy saved with this plan.</p>}
