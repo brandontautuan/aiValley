@@ -4,11 +4,19 @@ import { brand } from "../brand.ts";
 import { localTime, money, timestamp, windowLabel } from "../format.ts";
 import { BrandMark } from "./BrandMark.tsx";
 import { SocialMediaPlan } from "./SocialMediaPlan.tsx";
+import { SponsorTag } from "./SponsorTag.tsx";
 
 const isDraft = (content: Explanation | SocialDraft): content is SocialDraft => "caption" in content;
 
 const SourceTag = ({ source }: { source: "model" | "template" }) =>
-  source === "model" ? <span className="tag on">AI draft · checked</span> : <span className="tag">Template (AI unavailable)</span>;
+  source === "model" ? (
+    <span className="source-tags">
+      <span className="tag on">AI draft · checked</span>
+      <SponsorTag sponsor="zoowork" label="Written by a ZooWork agent" />
+    </span>
+  ) : (
+    <span className="tag" title="The ZooWork agent was unavailable or its reply failed our checks, so a built-in template was used.">Template (AI unavailable)</span>
+  );
 
 /** Explanation plus a phone-style post preview whose terms are checked against the current offer. */
 export function PromotePanel({

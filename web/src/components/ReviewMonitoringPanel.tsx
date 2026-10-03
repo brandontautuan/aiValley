@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReviewMention, ReviewMonitoringResponse, ReviewMonitoringResult, ReviewTheme } from "../../../contracts/index.ts";
 import { api, ApiRequestError } from "../api.ts";
 import { timestamp } from "../format.ts";
+import { SponsorTag } from "./SponsorTag.tsx";
 
 const STATUS_COPY = {
   completed: "Ready to read",
@@ -101,7 +102,7 @@ export function ReviewMonitoringPanel({ locationId, date }: { locationId: string
     <section className="panel research-panel" aria-labelledby="review-monitoring">
       <div className="panel-head">
         <div>
-          <span className="eyebrow">Optional context</span>
+          <span className="eyebrow">Optional context · <SponsorTag sponsor="tavily" label="Powered by Tavily" /></span>
           <h2 id="review-monitoring">Competitor reviews</h2>
         </div>
         <button className="ghost" onClick={refresh} disabled={busy}>
@@ -116,7 +117,7 @@ export function ReviewMonitoringPanel({ locationId, date }: { locationId: string
           <div className="research-overview">
             <strong>{mentionCount}</strong>
             <span>review page{mentionCount === 1 ? "" : "s"}</span>
-            <span className="muted">· {data.results.length} competitor{data.results.length === 1 ? "" : "s"}</span>
+            <span className="muted">· {data.results.length} competitor{data.results.length === 1 ? "" : "s"} · searched live via Tavily</span>
           </div>
           <div className="research-profiles">{data.results.map((result) => <Subject key={result.run.id} result={result} />)}</div>
           <p className="muted small">{data.limitations.join(" ")}</p>

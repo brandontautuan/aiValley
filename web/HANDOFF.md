@@ -1,7 +1,7 @@
 # Role A handoff — simplified planning UI
 
-## Disney Cafe update
-- Displayed UI name and document title are Disney Cafe Daily Planner. The logo uses a small abstract star rather than a character or official mark.
+## Project Northstar update
+- Displayed UI name and document title are Project Northstar. The logo uses a small abstract star rather than a character or official mark.
 - DM Sans body text and Alegreya headings, warm neutral surfaces, copper actions, blue information, and gold save emphasis form the updated visual language. Navigation tabs, buttons, and disclosures now have distinct states and brief motion with reduced-motion support.
 - Each store review now shows nearby competitor context immediately after the recommendation, with a visible public-source research action and deeper sample evidence. A jump link in the store header makes it easy to find.
 - The navbar exposes Daily planning, Saved plans, Week outlook, Month calendar, and Strategy directly. Social media planning, caption creation, and explanation are visible on the store review page; the header links directly to that section.

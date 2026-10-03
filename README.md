@@ -1,4 +1,4 @@
-# Disney Cafe Daily Planner
+# Project Northstar
 
 An AI-assisted daily revenue planner for a small coffee-shop chain. It answers one question: **what should each location do tomorrow, and why?**
 

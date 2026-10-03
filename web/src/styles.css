@@ -531,7 +531,7 @@ button, .button { min-height: 44px; }
   .post-head { flex-wrap: wrap; }
 }
 
-/* Disney Cafe: a calm operations UI with a small animation-studio accent. */
+/* Project Northstar: a calm operations UI with a small animation-studio accent. */
 ::selection { background: var(--accent-soft); color: var(--text); }
 html { scroll-behavior: smooth; }
 body { accent-color: var(--accent); }
@@ -696,3 +696,55 @@ main > section { animation: page-enter 210ms cubic-bezier(.22, 1, .36, 1) both; 
 @media (prefers-reduced-motion: reduce) {
   .pulse-dot { animation: none; }
 }
+
+/* Sponsor attribution: where ZooWork and Tavily are used. Colours come from existing tokens so both themes work. */
+.sponsor-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; font-weight: 600; line-height: 1.2; padding: 3px 10px 3px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; }
+.sponsor-tag.zoowork { background: var(--accent-soft); color: var(--accent-strong); }
+.sponsor-tag.tavily { background: var(--info-soft); color: var(--info-text); }
+.source-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.eyebrow .sponsor-tag { margin-left: 2px; }
+.provenance { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 10px; }
+.provenance code { font-family: var(--mono); font-size: 0.78rem; }
+
+.sponsor-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin-top: 40px; padding: 18px 0 28px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.82rem; }
+.sponsor-footer > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sponsor-footer .link { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+
+.how .flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px; }
+.flow-step { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px; background: var(--surface-2); border-radius: 12px; border-top: 3px solid var(--border-strong); }
+.flow-step p { margin: 0; }
+.flow-kind { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.flow-step.rules { border-top-color: var(--muted); }
+.flow-step.zoowork { border-top-color: var(--accent); background: var(--accent-soft); }
+.flow-step.zoowork .flow-kind { color: var(--accent-strong); }
+.flow-step.checks { border-top-color: var(--warn); }
+.flow-step.human { border-top-color: var(--text); }
+.flow-arrow { position: absolute; right: -20px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.flow-side { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--info-soft); color: var(--info-text); }
+.flow-side p { margin: 0; flex: 1 1 320px; }
+
+.how-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.how-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; border-top: 3px solid var(--border-strong); }
+.how-card.zoowork { border-top-color: var(--accent); }
+.how-card.tavily { border-top-color: var(--info); }
+.how-card h2 { margin: 0; }
+.how-card ul, .guardrails ul { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 6px; }
+.how-card .sponsor-tag { align-self: flex-start; }
+.how-links { list-style: none; padding-left: 0 !important; }
+.how-links .link { display: inline-flex; align-items: center; gap: 4px; }
+.how-fallback { margin: auto 0 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.guardrails .panel-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+
+@media (max-width: 960px) {
+  .how .flow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .flow-arrow { right: auto; left: 50%; top: auto; bottom: -22px; transform: translateX(-50%) rotate(90deg); }
+}
+@media (max-width: 640px) {
+  .sponsor-footer .link { margin-left: 0; }
+}
+
+.sponsor-logo { display: inline-flex; align-items: center; padding: 5px 12px; background: #ffffff; border-radius: 10px; box-shadow: 0 0 0 1px var(--border); line-height: 0; vertical-align: middle; }
+.sponsor-logo img { display: block; width: auto; max-width: 100%; }
+.how-card .sponsor-logo { align-self: flex-start; padding: 8px 14px; }
+.sponsor-logo.zoowork { background: #0e0522; box-shadow: none; padding: 0; overflow: hidden; }
+.how-card .sponsor-logo.zoowork { padding: 0; }
