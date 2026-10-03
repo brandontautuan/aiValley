@@ -15,11 +15,11 @@ import { hrefFor, parseHash, routePath, type Route } from "./nav.ts";
 const DEFAULT_DATE = "2026-10-05";
 
 const TABS: Array<{ path: string; label: string; active: (route: Route) => boolean }> = [
-  { path: "/", label: "Today", active: (route) => route.page === "today" || route.page === "location" },
+  { path: "/", label: "Daily planning", active: (route) => route.page === "today" || route.page === "location" },
+  { path: "/plan", label: "Saved plans", active: (route) => route.page === "plan" },
   { path: "/week", label: "Week", active: (route) => route.page === "week" },
   { path: "/month", label: "Month", active: (route) => route.page === "month" },
   { path: "/strategy", label: "Strategy", active: (route) => route.page === "strategy" },
-  { path: "/plan", label: "Action plan", active: (route) => route.page === "plan" },
 ];
 
 export function App() {
@@ -29,6 +29,8 @@ export function App() {
   const [scenario, setScenario] = useState<ScenarioId>(initial.params.scenario ?? "typical");
   // Bumped after a demo reset so every view refetches.
   const [epoch, setEpoch] = useState(0);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Links may omit ?date/&scenario; those keep the current values.
   useEffect(() => {
@@ -51,17 +53,26 @@ export function App() {
 
   async function resetDemo() {
     if (!window.confirm("Reset the demo? Saved plans and edits will be cleared.")) return;
-    await api.reset();
-    setDate(DEFAULT_DATE);
-    setScenario("typical");
-    setRoute({ page: "today" });
-    setEpoch((value) => value + 1);
+    setResetting(true);
+    setResetError(null);
+    try {
+      await api.reset();
+      setDate(DEFAULT_DATE);
+      setScenario("typical");
+      setRoute({ page: "today" });
+      setEpoch((value) => value + 1);
+    } catch {
+      setResetError("The demo could not be reset. Please try again.");
+    } finally {
+      setResetting(false);
+    }
   }
 
   const params = { date, scenario };
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content" onClick={(event) => { event.preventDefault(); document.getElementById("main-content")?.focus(); }}>Skip to content</a>
       <header className="topbar">
         <a className="brand" href={hrefFor("/", params)}>
           <BrandMark className="logo" title={brand.name} />
@@ -71,27 +82,47 @@ export function App() {
           </span>
         </a>
         <nav className="tabs" aria-label="Views">
-          {TABS.map((tab) => (
+          {TABS.slice(0, 2).map((tab) => (
             <a key={tab.path} href={hrefFor(tab.path, params)} className={tab.active(route) ? "active" : ""} aria-current={tab.active(route) ? "page" : undefined}>
               {tab.label}
             </a>
           ))}
+          <details className="nav-more" key={route.page}>
+            <summary>{TABS.slice(2).find((tab) => tab.active(route))?.label ?? "More views"}</summary>
+            <div className="nav-menu">
+              {TABS.slice(2).map((tab) => (
+                <a key={tab.path} href={hrefFor(tab.path, params)} aria-current={tab.active(route) ? "page" : undefined}>
+                  {tab.label === "Week" ? "Weekly outlook" : tab.label === "Month" ? "Monthly calendar" : "Multi-day strategy"}
+                </a>
+              ))}
+            </div>
+          </details>
         </nav>
         <div className="controls">
           <label className="date-control">
             <span>Planning date</span>
             <input type="date" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} />
           </label>
-          <ScenarioToggle value={scenario} onChange={setScenario} compact />
-          <button className="ghost" onClick={resetDemo}>Reset demo</button>
         </div>
       </header>
-      <div className="fixture-banner">{brand.fixtureNotice}</div>
-      <main key={epoch}>
-        {route.page === "today" && <Today date={date} scenario={scenario} onScenario={setScenario} />}
+      <div className="demo-strip">
+        <span>{brand.fixtureNotice}</span>
+        <details className="demo-settings">
+          <summary>{scenario === "local-event" ? "Local event day" : "Typical day"} · Demo settings</summary>
+          <div className="panel demo-options">
+            <p>Try a different day to see how local events affect the suggestions.</p>
+            <ScenarioToggle value={scenario} onChange={setScenario} compact />
+            <p className="small muted">Reset clears saved plans and edits for this demo.</p>
+            <button disabled={resetting} onClick={resetDemo}>{resetting ? "Resetting…" : "Reset demo"}</button>
+          </div>
+        </details>
+      </div>
+      {resetError && <p className="error" role="alert">{resetError}</p>}
+      <main id="main-content" tabIndex={-1} key={`${epoch}:${date}:${scenario}`}>
+        {route.page === "today" && <Today date={date} scenario={scenario} />}
         {route.page === "week" && <Week date={date} scenario={scenario} />}
         {route.page === "month" && <Month date={date} scenario={scenario} />}
-        {route.page === "location" && <LocationDetail locationId={route.id} date={date} scenario={scenario} />}
+        {route.page === "location" && <LocationDetail key={route.id} locationId={route.id} date={date} scenario={scenario} />}
         {route.page === "strategy" && <Strategy date={date} scenario={scenario} />}
         {route.page === "plan" && <ActionPlan date={date} scenario={scenario} />}
       </main>

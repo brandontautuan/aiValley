@@ -24,6 +24,7 @@ export function PromotePanel({
   onDraft: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const selected = recommendation.candidates.find((candidate) => candidate.id === recommendation.selectedCandidateId)!;
   const { explanation, socialDraft } = recommendation;
   const staleDrafts = recommendation.staleContent.filter(isDraft);
@@ -47,18 +48,20 @@ export function PromotePanel({
     : [];
 
   async function copy(text: string) {
+    setCopyError(null);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
+      setCopyError("Copying was blocked. Select the caption in the preview and copy it manually.");
       setCopied(false);
     }
   }
 
   return (
     <div className="promote">
-      <div className="phone" aria-label="Instagram post preview">
+      {shown && <div className="phone" aria-label="Instagram post preview">
         <div className="screen">
           <div className="post-head">
             <span className="avatar" aria-hidden>{brand.name.charAt(0)}</span>
@@ -80,31 +83,31 @@ export function PromotePanel({
                 <strong>{handle}</strong> {shown.caption}
               </span>
             ) : (
-              <span className="muted">No post yet for revision {recommendation.revision}. Settle the offer, then generate the copy.</span>
+              <span className="muted">Choose your offer first, then create a caption.</span>
             )}
           </div>
           {stale && (
             <div className="stale-overlay">
               <strong>This copy is out of date</strong>
               <span className="small">
-                It was written for revision {stale.revision} at {money(stale.terms.priceCents)}. The offer is now {money(currentPrice)} (revision {recommendation.revision}), so the old copy
-                can't be saved with it.
+                The plan has changed since this caption was written. Create a new caption to match the current item, price, and hours.
               </span>
               <button className="primary" disabled={busy !== null || recommendation.status === "dismissed"} onClick={onDraft}>
-                {busy === "draft" ? "Writing…" : `Regenerate for revision ${recommendation.revision}`}
+                {busy === "draft" ? "Writing…" : "Update caption"}
               </button>
             </div>
           )}
         </div>
       </div>
 
+      }
       <div className="promote-side">
         <div className="panel">
           <div className="panel-head">
             <h3>Checked against the offer</h3>
             {socialDraft && <SourceTag source={socialDraft.source} />}
           </div>
-          {checks.length === 0 && <p className="muted small">Generate the copy to check it against revision {recommendation.revision}.</p>}
+          {checks.length === 0 && <p className="muted small">Create a caption using the current item, price, store, and hours. We’ll check that those details match.</p>}
           {checks.map((check) => (
             <div key={check.label} className="check-row">
               <span className={`check ${check.ok ? "ok" : "bad"}`} aria-label={check.ok ? "matches" : "does not match"}>
@@ -116,9 +119,10 @@ export function PromotePanel({
           ))}
           <div className="actions">
             <button className="primary" disabled={busy !== null || recommendation.status === "dismissed"} onClick={onDraft}>
-              {busy === "draft" ? "Writing…" : socialDraft ? "Regenerate copy" : "Generate copy"}
+              {busy === "draft" ? "Writing…" : socialDraft ? "Rewrite caption" : "Create caption"}
             </button>
             {socialDraft && <button onClick={() => copy(socialDraft.caption)}>{copied ? "Copied" : "Copy caption"}</button>}
+            {copyError && <p className="error" role="alert">{copyError}</p>}
           </div>
         </div>
 
@@ -127,7 +131,7 @@ export function PromotePanel({
             <h3>Suggested post time</h3>
             <p className="num big-line">{timestamp(socialDraft.postAt)}</p>
             <p className="muted small">{socialDraft.postingRationale}</p>
-            <h3>Creative brief</h3>
+            <h3>Photo idea</h3>
             <p className="small">{socialDraft.creativeBrief}</p>
           </div>
         )}
@@ -153,7 +157,7 @@ export function PromotePanel({
               </details>
             </>
           ) : (
-            <p className="muted small">No written explanation yet for revision {recommendation.revision}.</p>
+            <p className="muted small">Get an optional explanation of the plan and its assumptions.</p>
           )}
         </div>
       </div>

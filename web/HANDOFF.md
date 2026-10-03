@@ -1,45 +1,39 @@
-# Role A handoff — web and app setup
+# Role A handoff — simplified planning UI
 
 ## Ready interfaces and paths
-- `web/src/App.tsx`: shell, tabs (Today, Week, Month, Strategy, Action plan), date picker, segmented scenario toggle, demo reset.
-- `web/src/nav.ts`: hash routes `#/`, `#/week`, `#/month`, `#/strategy`, `#/plan`, `#/location/:id`, each with optional `?date=&scenario=`. Date and scenario live in the URL, so reloads and shared links restore the view. Links without a query keep the current values.
-- `web/src/brand.ts`: all visible brand and product copy (Harborline Coffee). Edit this one file to rebrand.
-- `web/src/insights.ts`: display-only helpers (sentences, daypart states, action labels). They interpret server numbers and compute no economics.
-- `web/src/components/`:
-  - **Today:** briefing cards with a mini hourly chart, a plain-language sentence and status, plus a "what changed" line for the event scenario.
-  - **Week:** a 7-day store × day heatmap split into lunch, afternoon and evening, with event tags, a detail panel and a promotion-fatigue warning.
-  - **Month:** a calendar of dated context records and saved plans, with the next 7 days outlined and a usual-pattern panel. It says clearly that it is not a forecast.
-  - **LocationDetail:** a page of five parts:
-    - `DemandChart`: annotated hourly chart showing the usual baseline behind the estimate, context and competitor notes, capacity and the offer window.
-    - Recommendation card, dark when holding price for capacity.
-    - Collapsible evidence.
-    - `OptionCards`: break-even bar and low/base/high range for each option.
-    - `TermsEditor`, `PromotePanel` (post preview checked field by field against the current terms, with a stale overlay), and a fixed `DecisionBar` at the bottom.
-    - `CompetitorResearchPanel`: manager-triggered Tavily context refresh with compact competitor/source cards, attributed links, retrieval timestamps, excerpts, limitations, unavailable/failed states, and an explicit review-only boundary.
-  - **ActionPlan:** day tabs, a store × hour timeline (promotion blocks, hold-price blocks, post-time pin), plan cards, replaced approvals, and "Copy plan as text".
-  - **StrategyPanel:** multi-day strategy runs (owned by the other web session).
-- `web/src/api.ts`: typed client for every Role B endpoint; surfaces `ApiError` bodies.
+- `web/src/App.tsx`: Daily planning and Saved plans are primary navigation. Week, Month, and Strategy remain under More views. One planning-date control; scenario and reset controls are under Demo settings. Date/scenario/location changes remount review state to prevent mixing contexts.
+- `web/src/components/Today.tsx`: action-first store cards, a short reason, optional demand details, and one saved-store count. Saved cards display the persisted terms and link to their saved scenario, even when another scenario is being explored.
+- `web/src/components/LocationDetail.tsx`: selected terms, reason, customer price, amount left after item costs, and discount sales target appear first. Forecast/evidence, comparisons/custom edits, social drafts, and competitor research are collapsed and explain their purpose. Assumptions and selected-offer warnings remain visible.
+- `TermsEditor.tsx` / `DecisionBar.tsx`: unapplied edits block approval and dismissal, with Update/Discard controls. End time must follow start time. Approval explicitly saves a plan without changing menus or publishing posts.
+- `OptionCards.tsx`: preserves server amounts and fractional sales estimates rather than rounding up and falsely claiming break-even. Invalid options cannot be selected.
+- `PromotePanel.tsx`: optional caption workflow, plain-language stale warning, copy-failure feedback, and a post preview only once content exists. Outdated content cannot be copied as current.
+- `ActionPlan.tsx`: saved decisions first; schedule and captions are expandable. Empty days have a direct review link.
+- `web/src/styles.css`: responsive cards and disclosures, keyboard focus/skip link, phone-friendly controls, and contained chart scrolling.
+- Existing URL routes and API contracts remain unchanged. All changes are confined to Role A paths.
 
 ## Contract version
 1 (`contracts/index.ts`).
 
 ## How to run/check
-`npm run dev`, then open http://localhost:5173. `npm run check` typechecks the UI.
+- `npm run dev` for development.
+- `npm run check` for typechecking and deterministic module checks.
+- `npm run build && npm start` for the production demo.
+- Working branch: `codex/simpler-planning-ui`, isolated managed worktree.
+- Local review preview: http://localhost:3107, with separate temporary demo data at `/private/tmp/harborline-ui-review`. No existing runtime data was reset.
 
 ## Checks completed
-- Typecheck, `npm run check` and the production build pass.
-- In headless Chrome against a real API with an isolated store, I rendered:
-  - Today in both scenarios.
-  - Week and Month.
-  - Downtown before and after an edit to 5%: the stale post shows "$12.60 ≠ $13.30", with a regenerate button.
-  - Arena on event night: hold-price card and an approved plan.
-  - The action-plan timeline.
-- Layout fits at 520px wide. Chrome's headless minimum window width prevented a true 390px check.
+- Repository typecheck, engine, data, intelligence, and server checks passed.
+- Production build passed; diff whitespace check passed.
+- Browser: collapsed daily overview, custom 5% offer, unapplied-edit approval protection, recalculation, template caption generation, subsequent 10% edit invalidating the caption, approval, and saved-plan persistence after reload.
+- Browser: local-event scenario retains the selected date and shows the arena capacity explanation.
+- Responsive checks include 390px phone width; saved plans and expanded forecast have no page-level horizontal overflow.
+- Final browser checks also cover saved terms/scenario links and desktop layout.
 
 ## Dependencies requested from other roles
-- **B (optional performance):** the Today, Week and Month views make one outlook request per store and day (21 for Week; up to 31 action-plan requests for Month). A range endpoint, e.g. `GET /api/outlook/range?start=&days=`, would cut this to one request.
-- **D (content):** only Oct 5 has context records, so Week and Month look sparse on later days. More dated fixture events would make the forward views richer, e.g. a Thursday game, a Saturday concert, a holiday and rain days.
+None for this revision. Prior optional requests remain: B may add a range endpoint for Week/Month request efficiency; D may add more dated context records beyond Oct 5.
 
 ## Known blockers and fallback behavior
-- There is no mock adapter yet; the UI runs against the live API only.
-- Public-web competitor research is available from a location page. It needs `TAVILY_API_KEY`; otherwise it visibly reports unavailable while fixture planning continues. It never changes a recommendation or promotion copy; an audited manager-promotion workflow is still required before a verified source could enter planning data.
+- Live API only; there is still no frontend mock adapter.
+- Competitor research needs server-side Tavily configuration; without it, the existing unavailable state preserves ordinary planning.
+- The API snapshots social content at approval. A caption generated afterward can be copied, but does not update an already saved plan; the UI now explains this limitation.
+- AI failure uses the existing labeled template fallback. Pricing calculations, contracts, API/state, and generated AI copy remain with their owning modules.

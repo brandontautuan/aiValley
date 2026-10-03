@@ -29,6 +29,7 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
   const { data, error } = useLoad(() => loadPlans(date, scenario), [date, scenario]);
   const [day, setDay] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading the action plan…</p>;
@@ -45,11 +46,13 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
 
   async function copyPlan() {
     const lines = [`${brand.name} plan for ${dateLabel(current)} (saved terms, not yet published):`, ...active.map((plan) => `- ${plan.locationName}: ${planText(plan)}`)];
+    setCopyError(null);
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
+      setCopyError("Copying was blocked by your browser. You can select and copy the plan details below.");
       setCopied(false);
     }
   }
@@ -59,15 +62,16 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
       <div className="hero">
         <div>
           <h1>
-            {dateLabel(current)} · {active.length} of {data.locations.length} stores decided
+            Saved plans
           </h1>
-          <p className="muted lead">Approved terms, saved for the team. Nothing has been published or sent to a register.</p>
+          <p className="muted lead">{dateLabel(current)} · Decisions for your team. Prices and posts still need to be updated outside this app.</p>
         </div>
         <div className="actions">
           <button disabled={active.length === 0} onClick={copyPlan}>{copied ? "Copied" : "Copy plan as text"}</button>
         </div>
       </div>
 
+      {copyError && <p className="error" role="alert">{copyError}</p>}
       <div className="day-tabs" role="tablist" aria-label="Day">
         {data.dates.map((entry) => {
           const count = (data.plans[entry] ?? []).filter((plan) => !plan.superseded).length;
@@ -80,7 +84,9 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
         })}
       </div>
 
-      <div className="panel timeline-wrap">
+      {active.length > 0 && <details className="panel disclosure">
+        <summary><strong>See the day’s schedule</strong><span>View saved decisions and suggested posting times by store.</span></summary>
+        <div className="timeline-wrap">
         <div className="tl">
           <div className="tl-row tl-scale">
             <span />
@@ -96,6 +102,8 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
         </div>
       </div>
 
+      </details>}
+
       {active.length === 0 ? (
         <div className="panel empty">
           <p>No approved plans for {dateLabel(current)} yet.</p>
@@ -107,7 +115,7 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
             <article key={plan.id} className="card">
               <div className="card-head">
                 <h2>{plan.locationName}</h2>
-                <span className="badge ok">Saved · rev {plan.revision}</span>
+                <span className="badge ok">Saved</span>
               </div>
               <p>
                 <strong>{planText(plan)}</strong>
@@ -115,13 +123,13 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
                   <>
                     <br />
                     <span className="muted small">
-                      Worth it at {plan.finalTerms.breakEvenUnits}+ {brand.itemNoun.plural} · {plan.scenario === "local-event" ? "Local event day" : "Typical day"}
+                      Needs {plan.finalTerms.breakEvenUnits} item sales to match regular pricing · {plan.scenario === "local-event" ? "Local event day" : "Typical day"}
                     </span>
                   </>
                 )}
               </p>
               {plan.socialDraft ? (
-                <blockquote className="caption small">{plan.socialDraft.caption}</blockquote>
+                <details><summary>View saved social caption</summary><blockquote className="caption small">{plan.socialDraft.caption}</blockquote></details>
               ) : (
                 <p className="muted small">{plan.finalTerms.kind === "discount" ? "No post saved with this plan." : "No post: there is no offer to promote."}</p>
               )}

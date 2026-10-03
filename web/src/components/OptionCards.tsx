@@ -26,7 +26,7 @@ export function OptionCards({ recommendation, disabled, onUse }: { recommendatio
           <button
             key={candidate.id}
             className={`option ${selected ? "sel" : ""} ${errors.length ? "blocked" : ""}`}
-            disabled={disabled || selected || !editable}
+            disabled={disabled || selected || !editable || errors.length > 0}
             aria-pressed={selected}
             onClick={() => onUse(candidate.terms)}
           >
@@ -39,19 +39,19 @@ export function OptionCards({ recommendation, disabled, onUse }: { recommendatio
               {candidate.kind === "discount" && <span className="muted strike">{money(candidate.regularPriceCents)}</span>}
             </div>
             <span className="small">
-              <span className="num">{money(candidate.contributionPerUnitCents)}</span> profit per item, before fixed costs
+              <span className="num">{money(candidate.contributionPerUnitCents)}</span> left per item after item costs
             </span>
 
-            <div className="meter" aria-label={`Usually about ${units(candidate.referenceUnits)} ${noun}${candidate.breakEvenUnits !== null ? `; worth it at ${candidate.breakEvenUnits} or more` : ""}`}>
+            <div className="meter" aria-label={`Usually about ${units(candidate.referenceUnits)} ${noun}${candidate.breakEvenUnits !== null ? `; match regular pricing at ${candidate.breakEvenUnits} or more` : ""}`}>
               {low && high && <div className="band" style={{ left: x(low.units), width: `calc(${x(high.units)} - ${x(low.units)})` }} />}
               {base && <div className="dot" style={{ left: x(base.units) }} />}
               <div className="tick ref" style={{ left: x(candidate.referenceUnits) }} />
               {candidate.breakEvenUnits !== null && <div className="tick be" style={{ left: x(candidate.breakEvenUnits) }} />}
             </div>
             <div className="meter-legend small">
-              <span><i className="mk ref" /> usually ~{units(Math.round(candidate.referenceUnits))} {noun}</span>
-              {candidate.breakEvenUnits !== null && <span><i className="mk be" /> worth it at {candidate.breakEvenUnits}+</span>}
-              {low && high && <span><i className="mk band" /> might sell {Math.round(low.units)}–{Math.round(high.units)} (assumed)</span>}
+              <span><i className="mk ref" /> usually ~{units(candidate.referenceUnits)} {noun}</span>
+              {candidate.breakEvenUnits !== null && <span><i className="mk be" /> target: {candidate.breakEvenUnits} item sales</span>}
+              {low && high && <span><i className="mk band" /> might sell {units(low.units)}–{units(high.units)} (assumed)</span>}
             </div>
 
             <p className="verdict">{verdict(candidate, base?.units ?? null, base?.contributionCents ?? null)}</p>
@@ -72,13 +72,10 @@ export function OptionCards({ recommendation, disabled, onUse }: { recommendatio
 
 function verdict(candidate: OfferCandidate, baseUnits: number | null, baseContribution: number | null): string {
   if (candidate.kind === "no-change") {
-    const value = candidate.referenceContributionCents !== null ? ` About ${money(candidate.referenceContributionCents)} contribution from this window.` : "";
-    return isCapacityHold(candidate) ? `Serves the rush at full price.${value}` : `No risk and no extra volume.${value}`;
+    const value = candidate.referenceContributionCents !== null ? ` About ${money(candidate.referenceContributionCents)} left after item costs during these hours.` : "";
+    return isCapacityHold(candidate) ? `Serves the rush at full price.${value}` : `Keeps the current price without assuming extra sales.${value}`;
   }
   if (baseUnits === null || candidate.breakEvenUnits === null) return "Economics unavailable for these terms.";
-  const diff = Math.round(baseUnits) - candidate.breakEvenUnits;
-  const result = baseContribution !== null ? ` (${money(baseContribution)} contribution)` : "";
-  if (diff > 0) return `Middle case ~${Math.round(baseUnits)} clears break-even by ${diff}${result}. A trial, not a guarantee.`;
-  if (diff === 0) return `Middle case lands right on break-even (${candidate.breakEvenUnits})${result}. Little upside.`;
-  return `Middle case ~${Math.round(baseUnits)} falls short of break-even (${candidate.breakEvenUnits})${result}.`;
+  const result = baseContribution !== null ? `, leaving ${money(baseContribution)} after item costs` : "";
+  return `Middle estimate: ${units(baseUnits)} item sales${result}. Compare this with the target above. Extra sales are assumed, not guaranteed.`;
 }
