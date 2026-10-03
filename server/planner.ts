@@ -4,6 +4,7 @@ import {
   type ApiError,
   type ApproveStrategyRunRequest,
   type ContentRequest,
+  type Location,
   type CreateStrategyRunRequest,
   type CreateRecommendationRequest,
   type DecisionRequest,
@@ -72,14 +73,36 @@ function parseHorizonDays(value: unknown): number {
 const hourLabel = (candidate: OfferCandidate) => `${candidate.terms.window.startHour}:00–${candidate.terms.window.endHour}:00`;
 
 /** Server-side boundary for ZooWork orchestration and optional Band research rooms. */
+export interface StrategyWorkflowEvidence {
+  id: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  claim: string;
+  locationRelevance: string;
+  limitations: string[];
+}
+
+export interface StrategyWorkflowInput {
+  /** Local correlation ID only; adapters must not transmit it to third parties. */
+  strategyRunId: string;
+  locationId: string;
+  planningDate: string;
+  scenario: ScenarioId;
+  horizonDays: number;
+  resolution: StrategyRun["resolution"];
+  location: Location;
+  deterministicRecommendation: {
+    id: string;
+    revision: number;
+    selected: OfferCandidate;
+    summary: string;
+  };
+  /** Curated, bounded records only. Never raw social or customer data. */
+  boundedEvidence: StrategyWorkflowEvidence[];
+}
+
 export interface StrategyWorkflow {
-  run(input: {
-    strategyRunId: string;
-    locationId: string;
-    planningDate: string;
-    scenario: ScenarioId;
-    horizonDays: number;
-  }): Promise<{ zooWorkRunId?: string; bandRoomId?: string; evidence: TrendEvidence[] }>;
+  run(input: StrategyWorkflowInput): Promise<{ zooWorkRunId?: string; bandRoomId?: string; evidence: TrendEvidence[] }>;
 }
 
 export interface PlannerOptions {
@@ -130,6 +153,31 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
 
   function verifiedEvidence(evidence: TrendEvidence[]): TrendEvidence[] {
     return evidence.filter((entry) => entry.status === "verified");
+  }
+
+  /** Limits third-party research input to relevant fixture summaries and public attribution. */
+  function boundedWorkflowEvidence(data: ReturnType<typeof loadPlanningData>, locationId: string): StrategyWorkflowEvidence[] {
+    const context = data.contextSignals
+      .filter((signal) => signal.locationIds.includes(locationId))
+      .map((signal) => ({
+        id: signal.id,
+        sourceUrl: signal.source,
+        sourceTitle: signal.title,
+        claim: signal.whyItMatters,
+        locationRelevance: `Applies to ${locationId} for the selected scenario.`,
+        limitations: ["Curated planning fixture; treat its adjustment as an assumption."],
+      }));
+    const competitors = data.competitorOffers
+      .filter((offer) => offer.locationId === locationId)
+      .map((offer) => ({
+        id: offer.id,
+        sourceUrl: offer.sourceUrl ?? offer.source,
+        sourceTitle: `${offer.competitorName}: ${offer.itemDescription}`,
+        claim: `${offer.competitorName} lists ${offer.itemDescription}${offer.priceCents === null ? "" : ` at ${(offer.priceCents / 100).toFixed(2)} USD`}.`,
+        locationRelevance: `Competitor fixture for ${locationId}.`,
+        limitations: [offer.comparabilityNotes, "Curated competitor fixture; manager review is required."].filter(Boolean),
+      }));
+    return [...context, ...competitors].slice(0, 12);
   }
 
   /** Ranked actions use only verified evidence; offer economics always come from Role C. */
@@ -359,7 +407,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
       const locationId = typeof body.locationId === "string" ? body.locationId : fail(400, "BAD_REQUEST", "locationId is required");
       const horizonDays = parseHorizonDays(body.horizonDays);
       // Verifies the location through the same data boundary as recommendations.
-      compute(date, scenario, locationId);
+      const { data, location } = compute(date, scenario, locationId);
       const id = `strategy-${locationId}-${date}-${scenario}-${horizonDays}`;
       const existing = store.read().strategyRuns[id];
       if (existing) return { contractVersion: CONTRACT_VERSION, strategyRun: existing };
@@ -396,7 +444,22 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
 
       if (strategyWorkflow) {
         try {
-          const result = await strategyWorkflow.run({ strategyRunId: id, locationId, planningDate: date, scenario, horizonDays });
+          const result = await strategyWorkflow.run({
+            strategyRunId: id,
+            locationId,
+            planningDate: date,
+            scenario,
+            horizonDays,
+            resolution: initial.resolution,
+            location,
+            deterministicRecommendation: {
+              id: recommendation.id,
+              revision: recommendation.revision,
+              selected: selectedCandidate(recommendation),
+              summary: recommendation.deterministicReason,
+            },
+            boundedEvidence: boundedWorkflowEvidence(data, locationId),
+          });
           zooWorkRunId = result.zooWorkRunId;
           bandRoomId = result.bandRoomId;
           evidence = result.evidence.filter(
@@ -407,7 +470,7 @@ export function createPlanner({ store, model, strategyWorkflow, now = () => new 
               typeof entry.claim === "string" &&
               Array.isArray(entry.limitations),
           );
-          fallbackMessage = "Workflow returned research evidence; only verified records informed ranked actions.";
+          fallbackMessage = `${zooWorkRunId ? `ZooWork run ${zooWorkRunId}` : "Workflow"} returned ${evidence.length} research record${evidence.length === 1 ? "" : "s"}; only verified records informed ranked actions.`;
         } catch {
           fallbackMessage = "Strategy workflow was unavailable; retained the deterministic recommendation and a conservative research fallback.";
         }

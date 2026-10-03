@@ -79,5 +79,7 @@ installed by Role A.
 ## Current Integration Work
 
 `server/INTEGRATION_NOTES.md` records the coffee-shop changes requested from
-Roles A, C, and D. No live ZooWork, Band, or Tavily transport is configured
-yet; wire credentials only in server-owned code and preserve the fallback path.
+Roles A, C, and D. `server/zoowork.ts` optionally starts a ZooWork Growth
+Planner run when its server-only endpoint and API key are configured. Band and
+Tavily transport remain unconfigured. Preserve the fallback path for missing or
+unavailable integrations.

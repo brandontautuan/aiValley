@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { ApiFailure, createPlanner, type Planner } from "./planner.ts";
 import { createFileStore } from "./store.ts";
+import { createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const WEB_DIST = join(ROOT, "web", "dist");
@@ -96,7 +97,12 @@ export function createApp(planner: Planner) {
 if (process.argv[1] === import.meta.filename) {
   const port = Number(process.env.PORT ?? 3000);
   const dataDir = resolve(ROOT, process.env.DATA_DIR ?? ".data");
-  const planner = createPlanner({ store: createFileStore(dataDir) });
+  const planner = createPlanner({
+    store: createFileStore(dataDir),
+    // Credentials stay in this server entry point; absent or invalid config uses
+    // the planner's manager-reviewable deterministic fallback.
+    strategyWorkflow: createZooWorkStrategyWorkflowFromEnv(),
+  });
   createApp(planner).listen(port, () => {
     console.log(`Revenue planner API on http://localhost:${port} (store: ${dataDir})`);
   });

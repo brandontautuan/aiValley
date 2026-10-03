@@ -41,5 +41,17 @@
 - The competitor-research endpoints return 501 `FEATURE_UNAVAILABLE` (stretch goal).
 - `createPlanner` accepts an optional server-only `strategyWorkflow` adapter.
   It may return ZooWork and Band identifiers plus bounded research evidence.
-  Only evidence marked `verified` can inform ranked actions; no adapter is
-  configured yet, so the deterministic fallback remains available.
+  Only evidence marked `verified` can inform ranked actions. The ZooWork adapter
+  is optional, so the deterministic fallback remains available.
+
+## ZooWork Growth Planner adapter
+- `server/zoowork.ts` starts a configured Growth Planner run, sending only a
+  reduced location profile, horizon, deterministic recommendation summary, and
+  at most 12 bounded evidence summaries. It neither sends customer data nor
+  raw social/media collections.
+- `server/index.ts` wires the adapter from server-only `ZOOWORK_GROWTH_PLANNER_URL`
+  and `ZOOWORK_API_KEY`. Missing, malformed, or unavailable configuration keeps
+  the existing deterministic fallback active.
+- The adapter normalizes returned evidence. Only explicitly verified, attributed
+  records receive `verified`; incomplete or unverified records remain visible as
+  `needs_review` and planner ranking excludes them.

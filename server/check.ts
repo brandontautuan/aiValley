@@ -7,6 +7,7 @@ import type { ActionPlanResponse, DecisionResponse, LocationOutlookResponse, Ove
 import { createApp } from "./index.ts";
 import { createPlanner, type PlannerOptions } from "./planner.ts";
 import { createFileStore } from "./store.ts";
+import { createZooWorkStrategyWorkflow, createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "planner-check-"));
 const date = "2026-10-05";
@@ -155,6 +156,40 @@ try {
       },
     },
   );
+
+  let zooWorkRequest: unknown;
+  await withServer(
+    async (call) => {
+      assert.equal((await call("POST", "/api/demo/reset")).status, 200);
+      const strategy = await call<StrategyRunResponse>("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 3 });
+      assert.equal(strategy.json.strategyRun.zooWorkRunId, "zoo-live-run");
+      assert.equal(strategy.json.strategyRun.evidence.length, 2);
+      assert.deepEqual(strategy.json.strategyRun.rankedActions.find((action) => action.kind === "organic-campaign")!.evidenceIds, ["confirmed-trend"]);
+    },
+    {
+      strategyWorkflow: createZooWorkStrategyWorkflow({
+        runUrl: "https://zoo.example.test/growth-planner/runs",
+        apiKey: "server-secret",
+        fetch: async (_url, init) => {
+          zooWorkRequest = JSON.parse(String(init?.body));
+          return new Response(
+            JSON.stringify({
+              runId: "zoo-live-run",
+              output: {
+                evidence: [
+                  { id: "confirmed-trend", sourceUrl: "https://example.com/confirmed", sourceTitle: "Confirmed trend", claim: "A local trend has been independently verified.", locationRelevance: "Downtown", status: "verified", limitations: [] },
+                  { id: "review-trend", sourceTitle: "Incomplete trend", claim: "Needs review.", locationRelevance: "Downtown", limitations: [] },
+                ],
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        },
+      }),
+    },
+  );
+  assert.deepEqual(Object.keys((zooWorkRequest as { input: Record<string, unknown> }).input).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
+  assert.equal(createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
   console.log("✓ server workflow checks passed");
 } finally {
   rmSync(dataDir, { recursive: true, force: true });

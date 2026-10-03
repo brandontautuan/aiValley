@@ -42,9 +42,26 @@ Visible branding now uses Harborline Coffee. The UI still needs to display
 Role B's strategy-run lifecycle, ranked actions, evidence freshness, and the
 manager approval boundary.
 
+### ZooWork environment example
+
+Please add these **empty placeholders only** to `.env.example` (Role A owns
+that root file):
+
+```env
+ZOOWORK_GROWTH_PLANNER_URL=
+ZOOWORK_API_KEY=
+```
+
+Never add a real endpoint containing credentials or a real API key to Git.
+Developers set actual values in their untracked local `.env`; deployed
+environments set them through their secret manager. The server treats either
+missing value as an optional-integration fallback and keeps the deterministic,
+manager-reviewable strategy workflow available.
+
 ## Role B Follow-Up
 
-Strategy-run contracts, routes, and persistence are present. Live ZooWork/Band
-orchestration, Tavily route wiring, and the strategy UI remain stretch work.
-Existing one-day recommendations remain the authoritative economics and
-approval artifacts; strategy runs reference them rather than replacing them.
+Strategy-run contracts, routes, persistence, and optional ZooWork Growth
+Planner orchestration are present. Band orchestration, Tavily route wiring, and
+the strategy UI remain stretch work. Existing one-day recommendations remain
+the authoritative economics and approval artifacts; strategy runs reference
+them rather than replacing them.
