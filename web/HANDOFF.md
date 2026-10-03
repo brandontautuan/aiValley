@@ -28,7 +28,7 @@
 - `npm run check` for typechecking and deterministic module checks.
 - `npm run build && npm start` for the production demo.
 - Working branch: `codex/reject-no-history-dates`.
-- Local review preview: http://localhost:3107, with separate temporary demo data at `/private/tmp/disney-cafe-ui-review`. No existing runtime data was reset.
+- Local review preview: http://localhost:3107, with separate temporary demo data at `/private/tmp/disney-cafe-final-preview`. No existing runtime data was reset.
 
 ## Checks completed
 - Repository typecheck, engine, data, intelligence, and server checks passed.
