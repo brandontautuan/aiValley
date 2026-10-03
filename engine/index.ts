@@ -37,6 +37,7 @@ export const ENGINE_ASSUMPTIONS = [
   "Discount response is an assumption, not elasticity learned from traffic: low = +0% units (no response), base = 1.5× the discount percentage, high = 3× (10% off → +0% / +15% / +30%).",
   "Contribution is before fixed costs; it is not total restaurant profit.",
   "Item mix is assumed unchanged by context adjustments.",
+  "Units per order are assumed stable: when an hour's expected orders exceed capacity, item units are scaled down to the serviceable share, and a discount's assumed response is capped where the implied orders would exceed capacity.",
 ];
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
@@ -147,6 +148,10 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
     };
   });
 
+  /** Share of each hour's scenario orders that fits within capacity (1 when unconstrained). */
+  const serviceableShare = new Map(hourly.map((hour) => [hour.hour, hour.scenarioOrders > hour.capacityOrders ? hour.serviceableOrders / hour.scenarioOrders : 1]));
+  const capped = hourly.filter((hour) => hour.scenarioOrders > hour.capacityOrders);
+
   const items: ItemOutlook[] = data.menu
     .filter((item) => item.eligibleLocationIds.includes(location.id))
     .map((item) => {
@@ -156,7 +161,8 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
         hours: hours.map((hour) => {
           const baseline = averageOf(buckets, date, hour, (bucket) => bucket.units);
           const { adjustment } = hourAdjustment(data.contextSignals, location, date, hour, "assumedUnitAdjustment");
-          return { hour, baselineUnits: round1(baseline.mean), scenarioUnits: round1(baseline.mean * (1 + adjustment)) };
+          // Assumes stable units per order: units shrink with the orders the kitchen cannot serve.
+          return { hour, baselineUnits: round1(baseline.mean), scenarioUnits: round1(baseline.mean * (1 + adjustment) * serviceableShare.get(hour)!) };
         }),
       };
     });
@@ -197,6 +203,7 @@ export function calculateLocationOutlook(data: PlanningData, request: PlanningRe
   const notes: string[] = [];
   if (fallbackUsed) notes.push("Sparse same-weekday history; some hours use a broader weekday/weekend average.");
   if (constrained) notes.push(`Peak of ${peak.scenarioOrders} orders at ${peak.hour}:00 is at or above ${Math.round(capacityShare * 100)}% of capacity (${location.hourlyCapacityOrders}/hour).`);
+  if (capped.length) notes.push(`Item units at ${capped.map((hour) => `${hour.hour}:00`).join(", ")} are scaled to serviceable orders (assumes stable units per order).`);
   notes.push("Baseline excludes hours with past promotions.");
 
   return {
@@ -261,8 +268,20 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
   const variableCostCents = item?.variableCostCents ?? null;
   const proposedPriceCents = discountedPriceCents(regularPriceCents, terms.discountPct);
   const windowHours = outlook.hours.filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour);
-  const itemHours = outlook.items.find((entry) => entry.itemId === terms.itemId)?.hours ?? [];
-  const referenceUnits = round1(sum(itemHours.filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour).map((hour) => hour.scenarioUnits)));
+  const itemHours = (outlook.items.find((entry) => entry.itemId === terms.itemId)?.hours ?? []).filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour);
+  const referenceUnits = round1(sum(itemHours.map((hour) => hour.scenarioUnits)));
+  /**
+   * Units an assumed response cannot deliver because the implied orders would exceed capacity.
+   * Assumes stable units per order, so an hour's orders move in proportion to the item's units.
+   */
+  const unservedUnits = (unitChange: number) =>
+    sum(
+      itemHours.map((itemHour) => {
+        const hour = windowHours.find((entry) => entry.hour === itemHour.hour);
+        if (!hour || hour.serviceableOrders <= 0) return 0;
+        return itemHour.scenarioUnits * Math.max(0, 1 + unitChange - hour.capacityOrders / hour.serviceableOrders);
+      }),
+    );
   const windowOrders = round1(sum(windowHours.map((hour) => hour.scenarioOrders)));
   const windowCapacityOrders = sum(windowHours.map((hour) => hour.capacityOrders));
 
@@ -303,7 +322,7 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
     kind === "discount" && contributionPerUnitCents !== null
       ? RESPONSE_LABELS.map((label) => {
           const change = assumedUnitChange(label, terms.discountPct);
-          const units = round1(referenceUnits * (1 + change));
+          const units = round1(referenceUnits * (1 + change) - unservedUnits(change));
           return { label, assumedUnitChange: change, units, contributionCents: Math.round(units * contributionPerUnitCents) };
         })
       : [];

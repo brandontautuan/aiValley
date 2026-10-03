@@ -41,6 +41,13 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
     assert.ok(candidate.valid && base.units < candidate.breakEvenUnits!, "base response stays below break-even");
   }
 
+  // Not capacity-constrained, so the capacity cap (C2) leaves Downtown's numbers unchanged.
+  assert.ok(outlook.hours.every((hour) => hour.scenarioOrders < hour.capacityOrders && hour.serviceableOrders === hour.scenarioOrders));
+  assert.ok(!outlook.notes.some((note) => note.includes("scaled to serviceable orders")));
+  assert.deepEqual(candidates.map((candidate) => [candidate.referenceUnits, candidate.referenceContributionCents, candidate.breakEvenUnits]), [[13.5, 12_150, null], [13.5, 12_150, 15], [13.5, 12_150, 16]]);
+  assert.deepEqual(fivePct.responseScenarios.map((scenario) => [scenario.units, scenario.contributionCents]), [[13.5, 11_205], [14.5, 12_035], [15.5, 12_865]]);
+  assert.deepEqual(tenPct.responseScenarios.map((scenario) => [scenario.units, scenario.contributionCents]), [[13.5, 10_260], [15.5, 11_780], [17.6, 13_376]]);
+
   const selection = selectRecommendedCandidate(candidates, outlook);
   assert.equal(selection.selectedCandidateId, candidates[0].id);
   assert.match(selection.reason, /no discount clears its break-even/);
@@ -60,6 +67,37 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   const candidates = evaluateOffers(data, outlook);
   assert.equal(candidates.find((candidate) => candidate.id === selectRecommendedCandidate(candidates, outlook).selectedCandidateId)!.kind, "no-change");
   assert.ok(candidates.filter((candidate) => candidate.kind === "discount").every((candidate) => candidate.issues.some((issue) => issue.code === "CAPACITY_CONFLICT")));
+
+  // Capacity cap (C2): units follow serviceable orders, and no response scenario implies orders above capacity.
+  const overCapacity = outlook.hours.filter((hour) => hour.scenarioOrders > hour.capacityOrders);
+  assert.deepEqual(overCapacity.map((hour) => hour.hour), [18]);
+  assert.ok(outlook.notes.some((note) => note.includes("scaled to serviceable orders")));
+  const { itemId, window } = candidates[0].terms;
+  const itemHours = outlook.items.find((entry) => entry.itemId === itemId)!.hours.filter((hour) => hour.hour >= window.startHour && hour.hour < window.endHour);
+  // Raw demand: the same day with capacity lifted out of the way.
+  const unconstrained = { ...data, locations: data.locations.map((location) => (location.id === "arena" ? { ...location, hourlyCapacityOrders: 1000 } : location)) };
+  const rawItemHours = calculateLocationOutlook(unconstrained, { date, scenario: "local-event", locationId: "arena" }).items.find((entry) => entry.itemId === itemId)!.hours;
+  let maxServiceableUnits = 0;
+  for (const itemHour of itemHours) {
+    const hour = outlook.hours.find((entry) => entry.hour === itemHour.hour)!;
+    const rawUnits = rawItemHours.find((entry) => entry.hour === itemHour.hour)!.scenarioUnits;
+    if (hour.scenarioOrders > hour.capacityOrders) {
+      assert.ok(itemHour.scenarioUnits < rawUnits, `units at ${hour.hour}:00 are scaled below raw demand`);
+      assert.ok(Math.abs(itemHour.scenarioUnits - (rawUnits * hour.serviceableOrders) / hour.scenarioOrders) < 0.1, "scaled by the serviceable share of orders");
+    } else assert.equal(itemHour.scenarioUnits, rawUnits, `units at ${hour.hour}:00 are not scaled`);
+    maxServiceableUnits += (itemHour.scenarioUnits * hour.capacityOrders) / hour.serviceableOrders;
+  }
+  assert.equal(candidates[0].referenceUnits, Math.round(itemHours.reduce((total, hour) => total + hour.scenarioUnits, 0) * 10) / 10);
+  for (const candidate of candidates.filter((entry) => entry.kind === "discount")) {
+    for (const scenario of candidate.responseScenarios) {
+      assert.ok(scenario.units >= candidate.referenceUnits, "the cap never pushes units below the regular-price reference");
+      assert.ok(scenario.units <= maxServiceableUnits + 0.05, `${candidate.terms.discountPct}% ${scenario.label} stays within serviceable units`);
+      assert.equal(scenario.contributionCents, Math.round(scenario.units * candidate.contributionPerUnitCents!));
+    }
+    const high = candidate.responseScenarios.at(-1)!;
+    assert.ok(high.units < candidate.referenceUnits * (1 + high.assumedUnitChange) - 0.05, "the high response is capped by capacity");
+    assert.ok(candidate.breakEvenUnits! > maxServiceableUnits, "break-even is out of reach within capacity");
+  }
 
   const downtownTypical = outlookFor("downtown", "typical").outlook;
   const downtownEvent = outlookFor("downtown", "local-event").outlook;
