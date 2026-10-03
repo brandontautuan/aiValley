@@ -34,7 +34,7 @@ try {
     const overview = (await call<OverviewResponse>("GET", `/api/overview?date=${date}&scenario=local-event`)).json;
     assert.equal(overview.locations.length, 3);
     assert.equal(overview.locations.find((entry) => entry.location.id === "arena")!.selectedKind, "no-change");
-    assert.equal(overview.locations.find((entry) => entry.location.id === "downtown")!.selectedKind, "discount");
+    assert.equal(overview.locations.find((entry) => entry.location.id === "downtown")!.selectedKind, "no-change");
 
     const outlook = (await call<LocationOutlookResponse>("GET", `/api/locations/downtown/outlook?date=${date}`)).json;
     assert.equal(outlook.outlook.hours.length, 10);
@@ -50,7 +50,8 @@ try {
     assert.equal((await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json.id, rec.id, "create is idempotent");
 
     rec = (await call<Recommendation>("POST", `/api/recommendations/${rec.id}/social-draft`, { expectedRevision: 1 })).json;
-    assert.ok(rec.socialDraft?.caption.includes("$12.60"));
+    assert.ok(rec.socialDraft?.caption.includes("Downtown"));
+    assert.ok(rec.socialDraft?.creativeBrief.includes("no offer"));
 
     // Editing terms makes a new revision and invalidates copy.
     const terms = { ...rec.candidates.find((candidate) => candidate.id === rec.selectedCandidateId)!.terms, discountPct: 5 };
@@ -99,20 +100,20 @@ try {
     assert.equal(strategy.json.strategyRun.resolution, "hourly");
     assert.equal(strategy.json.strategyRun.evidence.length, 0);
     assert.equal(strategy.json.strategyRun.events.at(-2)?.type, "workflow-fallback");
-    const promotion = strategy.json.strategyRun.rankedActions.find((action) => action.kind === "promotion");
-    assert.ok(promotion, "downtown strategy keeps the deterministic promotion candidate");
+    const hold = strategy.json.strategyRun.rankedActions.find((action) => action.kind === "hold-monitor");
+    assert.ok(hold, "downtown strategy keeps the deterministic hold-and-monitor candidate");
 
     const longStrategy = await call<StrategyRunResponse>("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 365 });
     assert.equal(longStrategy.status, 200);
     assert.equal(longStrategy.json.strategyRun.resolution, "weekly");
     assert.equal((await call("POST", "/api/strategy-runs", { date, scenario: "typical", locationId: "downtown", horizonDays: 0 })).status, 400);
 
-    const staleStrategy = await call("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 0, actionId: promotion.id });
+    const staleStrategy = await call("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 0, actionId: hold.id });
     assert.equal(staleStrategy.status, 409);
-    const approvedStrategy = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: promotion.id });
+    const approvedStrategy = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: hold.id });
     assert.equal(approvedStrategy.status, 200);
     assert.equal(approvedStrategy.json.strategyRun.status, "approved");
-    const approvedAgain = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: promotion.id });
+    const approvedAgain = await call<StrategyRunResponse>("POST", `/api/strategy-runs/${strategy.json.strategyRun.id}/approve`, { expectedRevision: 1, actionId: hold.id });
     assert.equal(approvedAgain.status, 200, "strategy approval is idempotent");
   });
 

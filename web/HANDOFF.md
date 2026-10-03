@@ -15,6 +15,7 @@
     - Collapsible evidence.
     - `OptionCards`: break-even bar and low/base/high range for each option.
     - `TermsEditor`, `PromotePanel` (post preview checked field by field against the current terms, with a stale overlay), and a fixed `DecisionBar` at the bottom.
+    - `CompetitorResearch`: manager-triggered public-web research (Tavily) via `POST /api/locations/:id/competitor-research`; shows run status with the no-key `unavailable` fallback and lists `needs_review` sources. Labeled "public web · manager review"; never shown as a comparable offer or fed into pricing.
   - **ActionPlan:** day tabs, a store × hour timeline (promotion blocks, hold-price blocks, post-time pin), plan cards, replaced approvals, and "Copy plan as text".
   - **StrategyPanel:** multi-day strategy runs (owned by the other web session).
 - `web/src/api.ts`: typed client for every Role B endpoint; surfaces `ApiError` bodies.
@@ -41,4 +42,4 @@
 
 ## Known blockers and fallback behavior
 - There is no mock adapter yet; the UI runs against the live API only.
-- Tavily research UI is not built; the endpoint returns `FEATURE_UNAVAILABLE`.
+- Competitor research needs `TAVILY_API_KEY` to return sources; without it the run reports `unavailable`/`TAVILY_UNAVAILABLE` and the UI shows that fallback. Verified the live endpoint (downtown → two `unavailable` runs; unknown location → 404).
