@@ -14,6 +14,7 @@ import {
   MENU,
   UNITS_PER_ORDER,
 } from "./fixtures.ts";
+import { loadSnapshot, planningDataFromSnapshot } from "./live.ts";
 import { loadMockPlanningData, mockSeed } from "./mock.ts";
 
 export { DEFAULT_PLANNING_DATE, FIXTURE_LABEL } from "./fixtures.ts";
@@ -113,6 +114,9 @@ export function loadPlanningData(request: Partial<PlanningRequest> = {}): Planni
   };
   const seed = mockSeed(normalized.scenario);
   if (seed !== null) return loadMockPlanningData(normalized, seed);
+  // Opt-in: a snapshot written by data/fetch.ts replaces the curated fixtures. Mock seeds are unaffected.
+  const snapshotPath = process.env.PLANNING_SNAPSHOT;
+  if (snapshotPath) return planningDataFromSnapshot(loadSnapshot(snapshotPath), normalized);
   const history = generateHistory();
   return {
     request: normalized,

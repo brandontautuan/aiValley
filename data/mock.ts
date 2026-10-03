@@ -26,14 +26,14 @@ function unit(key: string): number {
 const between = (key: string, min: number, max: number) => min + unit(key) * (max - min);
 const pick = <T>(key: string, values: T[]): T => values[Math.floor(unit(key) * values.length)]!;
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
 }
 
 /** Local wall-clock hour on a date as an ISO string with the zone's offset for that day. */
-function localIso(date: string, hour: number, timeZone: string): string {
+export function localIso(date: string, hour: number, timeZone: string): string {
   const offset = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
     .formatToParts(new Date(`${date}T12:00:00Z`))
     .find((part) => part.type === "timeZoneName")!
