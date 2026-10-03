@@ -20,12 +20,12 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
 - Response assumptions: +0 / +7.5 / +15% at 5% off and +0 / +15 / +30% at 10% off; the low scenario keeps reference units and loses contribution.
 - Guardrails: ceiling, closed hours, invalid window, stale cost, missing cost, nonpositive and below-minimum contribution, eligibility, overlap.
 - The arena event affects only arena hours 16–20 and duplicate records aren't stacked; the arena gets a keep-price decision. `CAPACITY_CONFLICT` still uses the high scenario (now +30% at 10% off) and still flags both arena discounts.
-- Downtown (soft window 14:00–17:00, Signature Bowl) now gets keep-price: base units stay below break-even for both 5% and 10%.
+- Downtown (soft window 14:00–17:00, Coffee & Pastry Pair) now gets keep-price: base units stay below break-even for both 5% and 10%.
 - Sparse-history fallback.
 
 ## Dependencies requested from other roles
-- **B:** `server/check.ts` line 33 expects Downtown `selectedKind === "discount"` and line 44 expects a `$12.60` caption on the default recommendation. Both fail with C1, so `npm run check` fails at `server/check.ts` (typecheck, engine, data and intelligence pass). Please update once the demo story below is decided.
-- **D / team lead:** decide the demo story. Under these assumptions no fixture item can earn a discount recommendation: base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price, and every fixture item is at 35% or more. Options: accept keep-price at Downtown and show the discount as a manager-edited trial, or change the selection policy (FRAMEWORK.md C4).
+- **B:** `server/check.ts` line 37 expects Downtown `selectedKind === "discount"` and line 49 expects a `$12.60` caption on the default recommendation (line numbers as of main @ c35194b). Both fail with C1, so `npm run check` fails at `server/check.ts` (typecheck, engine, data and intelligence pass). Please update once the demo story below is decided.
+- **D / team lead:** decide the demo story. Under these assumptions no fixture item can earn a discount recommendation: base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price, and every offer-eligible fixture item is at 35% or more (after the coffee-shop pivot too). Options: accept keep-price at Downtown and show the discount as a manager-edited trial, or change the selection policy (FRAMEWORK.md C4).
 
 ## Known blockers and fallback behavior
 - `npm run check` fails at `server/check.ts` until B updates it (above). The engine was not loosened to force a discount.
@@ -33,4 +33,4 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
 
 ## Known limitations
 - Response values (0 / 1.5× / 3× the discount %) are assumptions to tune, not measurements.
-- No bundle candidate yet.
+- No separate bundle candidate; the default item is whichever `offerEligible` item has the most expected units in the focus window (today the Coffee & Pastry Pair).

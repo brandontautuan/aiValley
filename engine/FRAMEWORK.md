@@ -1,6 +1,6 @@
 # Role C Engine Framework
 
-Matches `main` @ `00c3a81` ("Restructure to the four-role layout and ship a working end-to-end planner"). §0 includes the findings from the Claude Code orientation review.
+Matches `main` @ `c35194b` (after the coffee-shop pivot and Role B's strategy runs). §0 includes the findings from the Claude Code orientation review.
 Role C owns `engine/**` only. Inputs and outputs are defined in `contracts/index.ts` (Role B), data comes from `data/index.ts` (Role D), and `server/planner.ts` (Role B) is the only caller.
 
 Rules: pure and deterministic, with no I/O, model calls, clock reads or env vars. Money is in integer cents, orders are separate from item units, and every assumption is labeled.
@@ -21,7 +21,7 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Raw demand shown separately from serviceable orders | ✅ | — |
 | Holiday effects location-specific or labeled | ✅ via fixtures + `ENGINE_ASSUMPTIONS` | — |
 | Always include regular price; evaluate 5% and 10% | ✅ | — |
-| One predefined bundle **if agreed** | ❌ | C3 (optional) |
+| One predefined bundle **if agreed** | ⚠️ no separate bundle candidate, but since the coffee-shop pivot the default item (Coffee & Pastry Pair) is itself a bundle-category item | C3 (optional) |
 | Contribution, break-even, reject nonpositive before dividing | ✅ | — |
 | Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Keep it, and state it in `ENGINE_ASSUMPTIONS`. | C6 |
 | Distinguish raw vs serviceable units; compare scenarios consistently | ⚠️ units not capped; serviceable units never enter contribution or break-even | C2 |
@@ -91,7 +91,7 @@ Changing any export's shape needs Role B's agreement first, since B, A and D all
 | Focus window | If constrained: the busiest 3-hour window containing the peak hour (`capacity-peak`). Otherwise: the softest 3-hour window, `soft-window` if < 60% of the day's average, else `no-clear-window` | `FOCUS_WINDOW_HOURS = 3`, `SOFT_WINDOW_SHARE = 0.6` |
 
 ### Offers
-- The default item is the eligible **bowl** with the most expected units in the focus window.
+- The default item is the `offerEligible` menu item sold at the location with the most expected units in the focus window (any category; today that is the Coffee & Pastry Pair).
 - Candidates are no-change, 5% off and 10% off. If edited terms are passed, they're no-change (same item and window) plus those terms; edited terms at 0% give no-change only.
 - Reference units are the scenario units in the window at the regular price, not capped at capacity.
 - Response scenarios: `units = ref × (1 + multiplier × pct/100)` with multipliers low 0, base 1.5, high 3 (10% off → +0 / +15 / +30%). Only discount candidates with a known cost get them.
@@ -109,7 +109,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ### Verified (`engine/check.ts`)
 - $14 example via `discountedPriceCents`/`breakEvenUnits` (the $180 and $197.60 figures are plain arithmetic, see C7), and the nonpositive contribution guard
-- Downtown's soft window is 14:00–17:00 on Signature Bowl, but since C1 neither 5% nor 10% reaches break-even in the base scenario, so Downtown keeps price. The check asserts the exact response values and that outcome.
+- Downtown's soft window is 14:00–17:00 on the Coffee & Pastry Pair, but since C1 neither 5% nor 10% reaches break-even in the base scenario, so Downtown keeps price. The check asserts the exact response values and that outcome.
 - The Arena event changes only Arena 16:00–20:00 and isn't double-counted; Arena keeps price, and its discounts are flagged with `CAPACITY_CONFLICT`
 - Every guardrail code except `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning, which no check asserts
 - Sparse fallback: `evidenceQuality` is sparse, baselines stay positive, selection keeps price
@@ -121,7 +121,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 Order: **C1 (done) → C2 → C6 → C7** (design-required), then **C4**, then optional **C3 / C5** only if the team agrees.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
-Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every fixture item is at 35% or more. `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
+Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
 
 Original brief:
 Today, 10% off assumes +10/+30/+50%. Even "low" assumes a lift, and base +30% makes discounts easy to justify.
@@ -136,12 +136,11 @@ Orders are capped today, but item units and response-scenario units are not.
 - Add an `ENGINE_ASSUMPTIONS` line.
 - **Check:** in the Arena event, discount scenarios can't exceed serviceable units, and reference contribution compares consistently with keep-price.
 
-### C3. Family Bowl Kit bundle at Residential (optional per design: "if agreed"; needs Role B)
-The design names this as Residential's opportunity. The fixture item exists (`category: "bundle"`, eligible at Residential only), but the default item filter only looks at bowls.
-- **Ask B:** add `"bundle"` to `OfferCandidate.kind` (or confirm reusing `"discount"` with the item's category).
-- Engine: when the location has an eligible bundle, add one bundle candidate for the focus window, priced and checked by the same guardrails. The kit's `variableCostCents` already covers its components.
-- Add a substitution/cannibalization limitation note; the design requires it.
-- **Check:** Residential evaluates the kit; Downtown and Arena never get it.
+### C3. Predefined bundle (optional per design: "if agreed") — premise changed by the coffee-shop pivot
+The bowl fixtures are gone. The default item filter now uses `MenuItem.offerEligible`, and the default item at every location is already a bundle-category item (Coffee & Pastry Pair), priced and checked like any other item; its `variableCostCents` covers its components. The Residential-only item is now the Weekend Breakfast Set (`category: "food"`).
+- No engine work is needed unless the team wants a *second*, location-specific candidate (e.g. the Weekend Breakfast Set at Residential) alongside the default item. That needs agreement on which item, and from B only if `OfferCandidate.kind` should distinguish it.
+- Add a substitution/cannibalization limitation note either way; the design requires it (also listed in C6).
+- **Check (if built):** Residential evaluates the extra item; Downtown and Arena never get it.
 
 ### C4. Selection and policy tuning (engine-only)
 - The design suggests a *cautious trial* for low evidence instead of a flat keep-price. Option: allow only the smallest discount (5%) when evidence is sparse and the window is soft. Keep it off if the team prefers a stricter demo.
@@ -161,7 +160,7 @@ The design names this as Residential's opportunity. The fixture item exists (`ca
 - **Break-even basis.** Add an `ENGINE_ASSUMPTIONS` line: "Break-even compares against expected units at the regular price for this scenario, not the raw historical baseline."
 
 ### C7. Strengthen checks (engine-only)
-- Build a minimal `PlanningData` fixture inside `engine/check.ts` (one location, Signature Bowl at $14 / $5, 20 reference units in a window). Assert via `evaluateOffers`: 1260¢ price, 760¢ contribution, 18,000¢ reference contribution, break-even 24, and 19,760¢ for a 26-unit scenario.
+- Build a minimal `PlanningData` fixture inside `engine/check.ts` (one location, one item at $14 / $5, 20 reference units in a window). Assert via `evaluateOffers`: 1260¢ price, 760¢ contribution, 18,000¢ reference contribution, break-even 24, and 19,760¢ for a 26-unit scenario.
 
 ---
 
@@ -169,12 +168,12 @@ The design names this as Residential's opportunity. The fixture item exists (`ca
 
 **To B (contracts):**
 ```text
-Needed change: (1) OfferCandidate.kind add "bundle"; (2) Selection add reasonCode + reasonFacts;
+Needed change: (1) only if C3 is agreed: OfferCandidate.kind add "bundle"; (2) Selection add reasonCode + reasonFacts;
   (3) optional: OfferTerms add channel so the overlap guardrail can match DESIGN.md §9
 Owning role/path: B, contracts/index.ts
-Current contract/version: 1 (main @ 00c3a81)
+Current contract/version: 1 (main @ c35194b)
 Proposed input/output: see engine/FRAMEWORK.md §4 C3 and C5
-Reason and affected callers: Residential bundle (DESIGN.md §9); lets D explain without inventing numbers. Callers: server/planner.ts, web OfferTable, intelligence
+Reason and affected callers: optional location-specific bundle (DESIGN.md §9); lets D explain without inventing numbers. Callers: server/planner.ts, web OfferTable, intelligence
 Temporary behavior while waiting: engine keeps current shapes; bundle and reasonCode off
 ```
 
