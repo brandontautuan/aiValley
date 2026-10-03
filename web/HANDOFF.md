@@ -14,7 +14,7 @@
     - Recommendation card, dark when holding price for capacity.
     - Collapsible evidence.
     - `OptionCards`: break-even bar and low/base/high range for each option.
-    - `TermsEditor`, `PromotePanel` (post preview checked field by field against the current terms, with a stale overlay), and a fixed `DecisionBar` at the bottom.
+    - `TermsEditor`, `PromotePanel` (post preview checked field by field against the current terms, with a stale overlay), `SocialMediaPlan` (reviewable three-step cadence tied to applied local context and the selected action; no viral/performance claims), and a fixed `DecisionBar` at the bottom.
     - `CompetitorResearchPanel`: manager-triggered Tavily context refresh with compact competitor/source cards, attributed links, retrieval timestamps, excerpts, limitations, unavailable/failed states, and an explicit review-only boundary.
   - **ActionPlan:** day tabs, a store × hour timeline (promotion blocks, hold-price blocks, post-time pin), plan cards, replaced approvals, and "Copy plan as text".
   - **StrategyPanel:** multi-day strategy runs (owned by the other web session).
