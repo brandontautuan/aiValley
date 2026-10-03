@@ -257,7 +257,7 @@ try {
               runId: "zoo-content-run",
               payload: {
                 message: {
-                  content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Harborline Coffee Downtown. Open today — stop in when you’re nearby.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }],
+                  content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Disney Cafe Downtown. Open today — stop in when you’re nearby.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }],
                 },
               },
             };
@@ -289,7 +289,7 @@ try {
             yield {
               eventType: "agent.assistant",
               runId: "zoo-content-run",
-              payload: { message: { content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Harborline Coffee Downtown this Sunday.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }] } },
+              payload: { message: { content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Disney Cafe Downtown this Sunday.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }] } },
             };
             yield { eventType: "run.finished", runId: "zoo-content-run", payload: { status: "succeeded" } };
           },
