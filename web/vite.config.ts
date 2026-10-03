@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // The web app lives in web/; /api is proxied to the Node server (npm run dev:server).
+// The production build goes to web/dist, which vercel.json names as the output directory.
 export default defineConfig({
   root: import.meta.dirname,
   plugins: [react()],
