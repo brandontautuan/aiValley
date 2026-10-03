@@ -72,6 +72,10 @@ const assumedUnitChange = (label: ResponseScenario["label"], discountPct: number
 type Daypart = (typeof DAYPARTS)[number];
 const daypartOf = (hour: number): Daypart => DAYPARTS.find((daypart) => hour >= daypart.startHour && hour < daypart.endHour)!;
 
+/** Limitation that applies to every candidate whose item is a predefined bundle. */
+export const BUNDLE_LIMITATION =
+  "Bundle offers: the bundle's variable cost is taken as covering every component, and scenarios do not model customers switching from the separate items to the bundle (substitution/cannibalization).";
+
 export const ENGINE_ASSUMPTIONS = [
   "Context adjustments are fixture assumptions, not calibrated effects.",
   "Discount response is an assumption, not elasticity learned from traffic: low = +0% units (no response), base = 1.5× the discount percentage, high = 3× (10% off → +0% / +15% / +30%).",
@@ -80,6 +84,7 @@ export const ENGINE_ASSUMPTIONS = [
   `Sparse history: an hour with fewer than ${MIN_OBSERVATIONS} same-weekday observations uses the average hour of its daypart (${DAYPARTS.map((daypart) => daypart.label).join(", ")}) across weekdays or weekends.`,
   "Discount scenarios ignore substitution and cannibalization: demand shifted from other items or from other hours is not modeled.",
   "Break-even compares against expected units at the regular price for this scenario, not the raw historical baseline.",
+  BUNDLE_LIMITATION,
   "Units per order are assumed stable: when an hour's expected orders exceed capacity, item units are scaled down to the serviceable share, and a discount's assumed response is capped where the implied orders would exceed capacity.",
 ];
 
@@ -346,6 +351,9 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
   const windowCapacityOrders = sum(windowHours.map((hour) => hour.capacityOrders));
 
   if (kind === "discount") {
+    if (item && location && item.eligibleLocationIds.includes(location.id) && !item.offerEligible) {
+      issues.push({ code: "ITEM_NOT_ELIGIBLE", severity: "error", field: "itemId", message: `${item.name} is not eligible for promotions.` });
+    }
     if (!Number.isInteger(terms.discountPct) || terms.discountPct < 0 || terms.discountPct >= 100) {
       issues.push({ code: "INVALID_DISCOUNT", severity: "error", field: "discountPct", message: "Discount must be a whole percentage from 0 to 99." });
     } else if (terms.discountPct > policy.maxDiscountPct) {
@@ -410,6 +418,15 @@ function buildCandidate(data: PlanningData, outlook: LocationOutlook, terms: Off
     issues,
     valid: !issues.some((issue) => issue.severity === "error"),
   };
+}
+
+/**
+ * Limitations that apply to one candidate, for display next to it. The contract has no
+ * per-candidate note or matching issue code yet (request to B in HANDOFF.md).
+ */
+export function candidateLimitations(data: PlanningData, candidate: OfferCandidate): string[] {
+  const item = data.menu.find((entry) => entry.id === candidate.terms.itemId);
+  return item?.category === "bundle" ? [BUNDLE_LIMITATION] : [];
 }
 
 /** Default item for a window: the eligible single item with the most expected units. */

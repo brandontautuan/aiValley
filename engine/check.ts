@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { OfferTerms, PlanningData } from "../contracts/index.ts";
 import { loadPlanningData } from "../data/index.ts";
-import { breakEvenUnits, calculateLocationOutlook, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
+import { breakEvenUnits, BUNDLE_LIMITATION, calculateLocationOutlook, candidateLimitations, DAYPARTS, discountedPriceCents, ENGINE_ASSUMPTIONS, ENGINE_POLICY, evaluateOffers, selectRecommendedCandidate } from "./index.ts";
 
 const date = "2026-10-05";
 
@@ -278,6 +278,48 @@ for (const phrase of ["daypart", "cannibalization", "Break-even compares against
     const goodCandidates = evaluateOffers(good.data, good.outlook);
     assert.deepEqual(selectRecommendedCandidate(goodCandidates, good.outlook, { sparseTrial: true }), selectRecommendedCandidate(goodCandidates, good.outlook));
   }
+}
+
+// Bundles, offer eligibility and location eligibility (C3).
+{
+  assert.match(BUNDLE_LIMITATION, /cannibalization/);
+  assert.match(BUNDLE_LIMITATION, /covering every component/);
+  assert.ok(ENGINE_ASSUMPTIONS.includes(BUNDLE_LIMITATION));
+
+  for (const locationId of ["downtown", "arena", "residential"]) {
+    for (const scenario of ["typical", "local-event"] as const) {
+      const { data, outlook } = outlookFor(locationId, scenario);
+      const candidates = evaluateOffers(data, outlook);
+      for (const candidate of candidates) {
+        const item = data.menu.find((entry) => entry.id === candidate.terms.itemId)!;
+        assert.ok(item.offerEligible, `${item.name} is offer-eligible`);
+        assert.notEqual(item.id, "drip-coffee", "Drip Coffee never gets a default candidate");
+        assert.ok(item.eligibleLocationIds.includes(locationId));
+        // The default item is the Coffee & Pastry Pair, a predefined bundle: every candidate carries the note.
+        assert.equal(item.category, "bundle");
+        assert.deepEqual(candidateLimitations(data, candidate), [BUNDLE_LIMITATION]);
+      }
+      // The Weekend Breakfast Set only appears at Residential.
+      assert.equal(outlook.items.some((item) => item.itemId === "weekend-breakfast-set"), locationId === "residential");
+    }
+  }
+
+  const { data, outlook } = outlookFor("downtown", "typical");
+  const window = { date, startHour: 14, endHour: 17 };
+  // A non-bundle item carries no bundle note.
+  const latte = evaluateOffers(data, outlook, { locationId: "downtown", itemId: "iced-latte", window, discountPct: 5 });
+  assert.ok(latte.every((candidate) => candidateLimitations(data, candidate).length === 0));
+  assert.equal(latte[1].valid, true);
+  // Drip Coffee cannot be discounted even when a manager asks for it; keeping its price is fine.
+  const [dripKeep, dripDiscount] = evaluateOffers(data, outlook, { locationId: "downtown", itemId: "drip-coffee", window, discountPct: 5 });
+  assert.deepEqual(dripKeep.issues, []);
+  assert.ok(dripDiscount.issues.some((issue) => issue.code === "ITEM_NOT_ELIGIBLE" && issue.severity === "error"));
+  assert.equal(dripDiscount.valid, false);
+  // The Weekend Breakfast Set is rejected outside Residential and accepted there.
+  assert.equal(evaluateOffers(data, outlook, { locationId: "downtown", itemId: "weekend-breakfast-set", window, discountPct: 5 })[1].valid, false);
+  const residential = outlookFor("residential", "typical");
+  const breakfast = evaluateOffers(residential.data, residential.outlook, { locationId: "residential", itemId: "weekend-breakfast-set", window: { date, startHour: 13, endHour: 16 }, discountPct: 5 })[1];
+  assert.ok(!breakfast.issues.some((issue) => issue.code === "ITEM_NOT_ELIGIBLE"));
 }
 
 console.log("✓ engine checks passed");
