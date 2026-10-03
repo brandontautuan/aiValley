@@ -23,7 +23,7 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
 ## Checks completed
 - The $14 / $5 / 20-unit example gives 1260¢ price, 760¢ contribution, 24-unit break-even and 19,760¢ at 26 units, both as plain arithmetic and end to end through `evaluateOffers` on a minimal inline dataset (C7).
 - Response assumptions: +0 / +7.5 / +15% at 5% off and +0 / +15 / +30% at 10% off; the low scenario keeps reference units and loses contribution.
-- Guardrails: ceiling, closed hours, invalid window, stale cost, missing cost, nonpositive and below-minimum contribution, eligibility, overlap.
+- Guardrails: ceiling, invalid discount (fractional, negative, 100%), closed hours, invalid window, stale cost, missing cost, nonpositive and below-minimum contribution, eligibility, overlap.
 - The arena event affects only arena hours 16–20 and duplicate records aren't stacked; the arena gets a keep-price decision. `CAPACITY_CONFLICT` still uses the high scenario (now +30% at 10% off) and still flags both arena discounts.
 - Downtown (soft window 14:00–17:00, Coffee & Pastry Pair) now gets keep-price: base units stay below break-even for both 5% and 10%.
 - Capacity cap (C2), Arena event day: only 18:00 exceeds capacity (40.4 vs 40 orders) and its item units are scaled by the serviceable share; other hours equal raw demand. No discount scenario exceeds the window's serviceable units (about 56.8 for the Coffee & Pastry Pair, 17:00–20:00), so 10% off high is 56.8 units, not 68.8, and both break-evens (58 and 63) are out of reach within capacity.
@@ -67,6 +67,16 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
   Reason and affected callers: lets D explain the decision without parsing text or inventing numbers (DESIGN.md §10). Callers: server/planner.ts (store on Recommendation), intelligence packets, web
   Temporary behavior while waiting: call engine `selectionFacts(candidates, outlook)` next to `selectRecommendedCandidate`; it returns exactly these values today, with no contract change
   ```
+- **A (README):**
+  ```text
+  Needed change: README.md demo script steps 1–2 say "Downtown gets a discount trial" and show "the 10%-off break-even threshold" as the recommendation
+  Owning role/path: A, README.md
+  Current contract/version: 1
+  Proposed input/output: step 1: all three stores keep the regular price on a typical day, each for a different reason; step 2: Downtown shows the soft 2–5 p.m. window and both break-even thresholds (15 units at 5% off, 16 at 10% off) that the cautious response assumptions do not reach; step 3 (manager edits in a 5% trial, recalculates, approves) still works as written
+  Reason and affected callers: since C1 the engine recommends keep-price at Downtown; the script no longer matches the app
+  Temporary behavior while waiting: none needed; the app itself is correct
+  ```
+- **Team lead:** DESIGN.md §15 says "three branches receive distinct, context-appropriate decisions". On a typical day all three keep price (Downtown: no discount clears break-even; Arena and Residential: demand within the usual range). On the event day Arena keeps price because of capacity. Decide whether that is distinct enough, or pick one of the options in the next item.
 - **D / team lead:** decide the demo story. Under these assumptions no fixture item can earn a discount recommendation: base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price, and every offer-eligible fixture item is at 35% or more (after the coffee-shop pivot too). Options: accept keep-price at Downtown and show the discount as a manager-edited trial, or change the selection policy (FRAMEWORK.md C4).
 
 ## Known blockers and fallback behavior

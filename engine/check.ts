@@ -157,6 +157,7 @@ const outlookFor = (locationId: string, scenario: "typical" | "local-event") => 
   const issuesFor = (overrides: Partial<OfferTerms>, existing: OfferTerms[] = []) => evaluateOffers(data, outlook, terms(overrides), existing)[1].issues.map((issue) => issue.code);
 
   assert.ok(issuesFor({ discountPct: 15 }).includes("DISCOUNT_ABOVE_CEILING"));
+  for (const discountPct of [7.5, -5, 100]) assert.ok(issuesFor({ discountPct }).includes("INVALID_DISCOUNT"), `${discountPct}% is not a valid discount`);
   assert.ok(issuesFor({ window: { date, startHour: 19, endHour: 22 } }).includes("CLOSED_HOURS"));
   assert.ok(issuesFor({ window: { date, startHour: 16, endHour: 14 } }).includes("INVALID_WINDOW"));
   assert.ok(issuesFor({ itemId: "oat-milk-latte" }).includes("STALE_COST"));
