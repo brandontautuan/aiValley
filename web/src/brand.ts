@@ -5,8 +5,6 @@
 export const brand = {
   name: "Harborline Coffee",
   product: "Revenue Planner",
-  /** Decorative glyph shown before the name; hidden from screen readers. */
-  logoGlyph: "◐",
   tagline: "What should each location do tomorrow, and why?",
   /** Label for an item unit in offer economics (e.g. "break-even units"). */
   itemNoun: { singular: "unit", plural: "units" },

@@ -3,15 +3,28 @@ import type { StrategyWorkflow } from "./planner.ts";
 
 const MAX_EVIDENCE = 12;
 const MAX_TEXT_LENGTH = 600;
-const REQUEST_TIMEOUT_MS = 8_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
-type FetchLike = typeof fetch;
+interface ZooWorkEvent {
+  eventType?: string;
+  payload?: Record<string, unknown>;
+  runId?: string;
+  cursor?: string;
+}
+
+interface ZooWorkClient {
+  createSession(agentId: string, input: { initial_events: Array<{ type: "user.message"; content: string }> }): Promise<{ session_id: string }>;
+  streamEvents(agentId: string, sessionId: string, options: { cursor?: string; signal: AbortSignal }): AsyncIterable<ZooWorkEvent>;
+}
+
+interface ZooWorkSdk {
+  createZooworkClient(input: { apiKey: string }): ZooWorkClient;
+}
 
 export interface ZooWorkWorkflowOptions {
-  /** Full server-side endpoint that starts the configured Growth Planner. */
-  runUrl: string;
-  apiKey: string;
-  fetch?: FetchLike;
+  /** A running private ZooWork agent, copied from its details dialog. */
+  agentId: string;
+  client: ZooWorkClient;
   now?: () => Date;
   timeoutMs?: number;
 }
@@ -40,59 +53,77 @@ interface ZooWorkRunInput {
   evidence: ZooWorkEvidenceInput[];
 }
 
-/**
- * A deliberately small integration boundary. The URL is configured as a full
- * Growth Planner run endpoint so this app does not guess at a vendor path.
- */
-export function createZooWorkStrategyWorkflow({ runUrl, apiKey, fetch: request = fetch, now = () => new Date(), timeoutMs = REQUEST_TIMEOUT_MS }: ZooWorkWorkflowOptions): StrategyWorkflow {
-  const endpoint = new URL(runUrl).toString();
-
+/** Runs the configured private Growth Planner through ZooWork's Session API. */
+export function createZooWorkStrategyWorkflow({ agentId, client, now = () => new Date(), timeoutMs = REQUEST_TIMEOUT_MS }: ZooWorkWorkflowOptions): StrategyWorkflow {
   return {
     async run(input) {
-      const payload = toZooWorkRequest(input);
-      const signal = AbortSignal.timeout(timeoutMs);
-      const response = await request(endpoint, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({ planner: "growth-planner", input: payload }),
-        signal,
+      const session = await client.createSession(agentId, {
+        initial_events: [{ type: "user.message", content: JSON.stringify(toZooWorkRequest(input)) }],
       });
-      if (!response.ok) throw new Error(`ZooWork returned ${response.status}`);
+      const result = await readRun(client, agentId, session.session_id, timeoutMs);
+      if (result.outcome !== "succeeded") throw new Error(`ZooWork run ${result.outcome ?? "did not finish"}`);
 
-      const body: unknown = await response.json();
-      const record = asRecord(body);
-      const zooWorkRunId = stringAt(record, ["runId"]) ?? stringAt(asRecord(record.run), ["id"]) ?? stringAt(record, ["id"]) ?? stringAt(asRecord(record.data), ["id"]);
-      if (!zooWorkRunId) throw new Error("ZooWork response did not include a run ID");
-
+      const zooWorkRunId = result.runId ?? session.session_id;
       return {
         zooWorkRunId,
-        evidence: normalizeEvidence(body, zooWorkRunId, input.location.name, now().toISOString()),
+        evidence: normalizeEvidence(parseAgentJson(result.text), zooWorkRunId, input.location.name, now().toISOString()),
       };
     },
   };
 }
 
-/** Returns no workflow when the server has not been configured for ZooWork. */
-export function createZooWorkStrategyWorkflowFromEnv(env: NodeJS.ProcessEnv = process.env): StrategyWorkflow | undefined {
-  const runUrl = env.ZOOWORK_GROWTH_PLANNER_URL?.trim();
+/** Loads the optional SDK only when both server-only credentials are configured. */
+export async function createZooWorkStrategyWorkflowFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<StrategyWorkflow | undefined> {
+  const agentId = env.ZOOWORK_AGENT_ID?.trim();
   const apiKey = env.ZOOWORK_API_KEY?.trim();
-  if (!runUrl || !apiKey) return undefined;
+  if (!agentId || !apiKey) return undefined;
   try {
-    return createZooWorkStrategyWorkflow({ runUrl, apiKey });
+    const packageName = "@zoowork-ai/sdk";
+    const sdk = (await import(packageName)) as ZooWorkSdk;
+    return createZooWorkStrategyWorkflow({ agentId, client: sdk.createZooworkClient({ apiKey }) });
   } catch {
-    // A malformed optional integration must not prevent the demo API starting.
     return undefined;
   }
 }
 
-function toZooWorkRequest(input: Parameters<StrategyWorkflow["run"]>[0]): ZooWorkRunInput {
-  if (!input.location || !input.deterministicRecommendation || !input.boundedEvidence || !input.resolution) {
-    throw new Error("ZooWork workflow requires the planner's bounded strategy context");
+async function readRun(client: ZooWorkClient, agentId: string, sessionId: string, timeoutMs: number): Promise<{ outcome?: string; runId?: string; text: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let cursor: string | undefined;
+  let runId: string | undefined;
+  let text = "";
+  try {
+    // ZooWork streams may close while idle; reconnect from the opaque cursor.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      for await (const event of client.streamEvents(agentId, sessionId, { ...(cursor ? { cursor } : {}), signal: controller.signal })) {
+        cursor = event.cursor ?? cursor;
+        runId = event.runId ?? runId;
+        text += assistantText(event);
+        if (event.eventType === "run.finished") return { outcome: stringValue(event.payload?.status), runId, text };
+      }
+      if (controller.signal.aborted) break;
+    }
+    throw new Error("ZooWork event stream ended before the run finished");
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
   }
+}
+
+function assistantText(event: ZooWorkEvent): string {
+  if (event.eventType !== "agent.assistant") return "";
+  const content = asRecord(event.payload?.message).content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      const record = asRecord(block);
+      return record.type === "text" && typeof record.text === "string" ? record.text : "";
+    })
+    .join("");
+}
+
+function toZooWorkRequest(input: Parameters<StrategyWorkflow["run"]>[0]): ZooWorkRunInput {
   const selected = input.deterministicRecommendation.selected;
   return {
     location: pickLocation(input.location),
@@ -121,46 +152,45 @@ function pickLocation(location: Location): ZooWorkRunInput["location"] {
   return { id: location.id, name: location.name, timezone: location.timezone, profile: location.profile };
 }
 
+function parseAgentJson(text: string): unknown {
+  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return {};
+  }
+}
+
 function normalizeEvidence(payload: unknown, runId: string, defaultLocation: string, retrievedAt: string): TrendEvidence[] {
-  const entries = evidenceFrom(payload).slice(0, MAX_EVIDENCE);
+  const root = asRecord(payload);
+  const entries = Array.isArray(root.evidence) ? root.evidence.slice(0, MAX_EVIDENCE) : [];
   return entries.map((value, index) => {
     const entry = asRecord(value);
-    const sourceUrl = nonEmpty(entry.sourceUrl) ?? nonEmpty(entry.url) ?? nonEmpty(entry.link) ?? "about:blank";
-    const sourceTitle = nonEmpty(entry.sourceTitle) ?? nonEmpty(entry.title) ?? "ZooWork research item";
-    const claim = nonEmpty(entry.claim) ?? nonEmpty(entry.summary) ?? nonEmpty(entry.text) ?? "ZooWork returned an evidence item without a claim.";
+    const sourceUrl = stringValue(entry.sourceUrl) ?? stringValue(entry.url) ?? stringValue(entry.link) ?? "about:blank";
+    const sourceTitle = stringValue(entry.sourceTitle) ?? stringValue(entry.title) ?? "ZooWork research item";
+    const claim = stringValue(entry.claim) ?? stringValue(entry.summary) ?? stringValue(entry.text) ?? "ZooWork returned an evidence item without a claim.";
     const suppliedLimitations = Array.isArray(entry.limitations) ? entry.limitations.filter((item): item is string => typeof item === "string") : [];
     const limitations = [...suppliedLimitations, ...(sourceUrl === "about:blank" ? ["Source URL was not supplied; this item cannot be verified."] : [])].slice(0, 5).map((item) => truncate(item, 240));
     const explicitlyVerified = entry.status === "verified" || entry.verified === true;
     return {
-      id: nonEmpty(entry.id) ?? `${runId}-evidence-${index + 1}`,
+      id: stringValue(entry.id) ?? `${runId}-evidence-${index + 1}`,
       sourceUrl: truncate(sourceUrl, 1_000),
       sourceTitle: truncate(sourceTitle),
       retrievedAt: isoTimestamp(entry.retrievedAt) ?? retrievedAt,
       ...(isoTimestamp(entry.publishedAt) ? { publishedAt: isoTimestamp(entry.publishedAt) } : {}),
       claim: truncate(claim),
-      locationRelevance: truncate(nonEmpty(entry.locationRelevance) ?? defaultLocation),
+      locationRelevance: truncate(stringValue(entry.locationRelevance) ?? defaultLocation),
       status: explicitlyVerified && sourceUrl !== "about:blank" ? "verified" : entry.status === "rejected" ? "rejected" : "needs_review",
       limitations,
     };
   });
 }
 
-function evidenceFrom(payload: unknown): unknown[] {
-  const root = asRecord(payload);
-  const candidates = [root.evidence, asRecord(root.output).evidence, asRecord(root.result).evidence, asRecord(root.data).evidence];
-  return candidates.find(Array.isArray) ?? [];
-}
-
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function stringAt(record: Record<string, unknown>, path: string[]): string | undefined {
-  const value = path.reduce<unknown>((current, key) => asRecord(current)[key], record);
-  return nonEmpty(value);
-}
-
-function nonEmpty(value: unknown): string | undefined {
+function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 

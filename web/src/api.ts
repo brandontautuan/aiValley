@@ -47,6 +47,8 @@ export const api = {
   overview: (date: string, scenario: ScenarioId) => request<OverviewResponse>("GET", `/api/overview?${qs({ date, scenario })}`),
   outlook: (locationId: string, date: string, scenario: ScenarioId) =>
     request<LocationOutlookResponse>("GET", `/api/locations/${locationId}/outlook?${qs({ date, scenario })}`),
+  competitorResearch: (locationId: string, date: string) =>
+    request<CompetitorResearchResponse>("POST", `/api/locations/${locationId}/competitor-research`, { date }),
   openRecommendation: (locationId: string, date: string, scenario: ScenarioId) =>
     request<Recommendation>("POST", "/api/recommendations", { locationId, date, scenario }),
   editRecommendation: (id: string, expectedRevision: number, terms: OfferTerms) =>
@@ -56,8 +58,6 @@ export const api = {
   decide: (id: string, expectedRevision: number, action: "approve" | "dismiss") =>
     request<DecisionResponse>("POST", `/api/recommendations/${id}/decision`, { expectedRevision, action }),
   actionPlan: (date: string) => request<ActionPlanResponse>("GET", `/api/action-plan?${qs({ date })}`),
-  competitorResearch: (locationId: string, date: string) =>
-    request<CompetitorResearchResponse>("POST", `/api/locations/${locationId}/competitor-research`, { date }),
   createStrategyRun: (locationId: string, date: string, scenario: ScenarioId, horizonDays: number) =>
     request<StrategyRunResponse>("POST", "/api/strategy-runs", { locationId, date, scenario, horizonDays }),
   strategyRun: (id: string) => request<StrategyRunResponse>("GET", `/api/strategy-runs/${id}`),

@@ -173,28 +173,41 @@ try {
     },
     {
       strategyWorkflow: createZooWorkStrategyWorkflow({
-        runUrl: "https://zoo.example.test/growth-planner/runs",
-        apiKey: "server-secret",
-        fetch: async (_url, init) => {
-          zooWorkRequest = JSON.parse(String(init?.body));
-          return new Response(
-            JSON.stringify({
+        agentId: "agt-growth-planner",
+        client: {
+          async createSession(_agentId, input) {
+            zooWorkRequest = JSON.parse(input.initial_events[0]!.content);
+            return { session_id: "zoo-session" };
+          },
+          async *streamEvents() {
+            yield {
+              eventType: "agent.assistant",
               runId: "zoo-live-run",
-              output: {
-                evidence: [
-                  { id: "confirmed-trend", sourceUrl: "https://example.com/confirmed", sourceTitle: "Confirmed trend", claim: "A local trend has been independently verified.", locationRelevance: "Downtown", status: "verified", limitations: [] },
-                  { id: "review-trend", sourceTitle: "Incomplete trend", claim: "Needs review.", locationRelevance: "Downtown", limitations: [] },
-                ],
+              cursor: "evt-1",
+              payload: {
+                message: {
+                  content: [
+                    {
+                      type: "text",
+                      text: JSON.stringify({
+                        evidence: [
+                          { id: "confirmed-trend", sourceUrl: "https://example.com/confirmed", sourceTitle: "Confirmed trend", claim: "A local trend has been independently verified.", locationRelevance: "Downtown", status: "verified", limitations: [] },
+                          { id: "review-trend", sourceTitle: "Incomplete trend", claim: "Needs review.", locationRelevance: "Downtown", limitations: [] },
+                        ],
+                      }),
+                    },
+                  ],
+                },
               },
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
+            };
+            yield { eventType: "run.finished", runId: "zoo-live-run", cursor: "evt-2", payload: { status: "succeeded" } };
+          },
         },
       }),
     },
   );
-  assert.deepEqual(Object.keys((zooWorkRequest as { input: Record<string, unknown> }).input).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
-  assert.equal(createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
+  assert.deepEqual(Object.keys(zooWorkRequest as Record<string, unknown>).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
+  assert.equal(await createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
 
   // The route returns Tavily sources only as manager-review evidence.
   await withServer(
