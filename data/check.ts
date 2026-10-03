@@ -6,6 +6,7 @@ const b = loadPlanningData({ date: "2026-10-05", scenario: "typical" });
 assert.deepEqual(a, b, "fixture loading is deterministic");
 
 assert.equal(a.locations.length, 3);
+assert.equal(a.chain.name, "Disney Cafe");
 assert.equal(a.menu.length, 5);
 assert.ok(a.menu.every((item) => Number.isInteger(item.regularPriceCents) && (item.variableCostCents === null || Number.isInteger(item.variableCostCents))));
 assert.ok(a.itemSales.every((bucket) => bucket.date < "2026-10-05"), "no future sales leak into history");
