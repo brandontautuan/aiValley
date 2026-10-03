@@ -13,7 +13,8 @@
   The demo date is fixed at 2026-10-05, a Monday.
 - `intelligence/index.ts`:
   - `generateExplanation(packet, model?)` and `generateSocialDraft(packet, model?)` return template output, or validated model output when a `ContentModel` is supplied.
-  - `validateGeneratedContent` rejects unknown evidence IDs and any price or percentage that is not in the packet.
+  - `validateGeneratedContent` rejects unknown evidence IDs and any price or percentage that is not in the packet. Social copy may state only the offer's own prices and discount; with `explanation: true` it also accepts competitor prices, the change vs. usual, response scenarios, and figures written in the reason, assumptions or signal notes.
+  - Model social copy is also rejected when a discount caption omits the offer price or uses giveaway wording ("on us", "complimentary"). A rejection falls back to the template silently; the reason is not logged.
 - `intelligence/competitorResearch.ts`: bounded, per-configured-competitor research request, unavailable/failure behavior, and evidence normalization. `searchCompetitorOffers` produces only attributable `needs_review` evidence with null offer facts.
 - `intelligence/tavilySearchTransport.ts`: server-only native-fetch Tavily Search adapter. It accepts an injected API key, sends a bounded advanced search, and returns source URL/title/excerpt/timestamps. It returns `undefined` when no key is supplied.
 - `data/SF_COMPETITOR_PROFILES`: SF pilot profiles keyed by the three fixture locations. Each profile supplies a specific storefront alias and an official-domain allowlist. The adapter sends this allowlist to Tavily and rejects returned sources outside it.
