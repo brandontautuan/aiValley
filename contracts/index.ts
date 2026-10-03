@@ -506,6 +506,41 @@ export interface CompetitorResearchResponse {
   results: CompetitorResearchResult[];
 }
 
+// ---------- Review monitoring (server-only Tavily search) ----------
+
+/** A topic an excerpt mentions, by keyword match. Not a sentiment or a rating. */
+export type ReviewTheme = "service" | "wait" | "price" | "taste" | "atmosphere";
+
+/** A search-result excerpt from a public review page, for manager reading only. */
+export interface ReviewMention {
+  evidenceId: string;
+  researchRunId: string;
+  subjectId: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  /** Hostname of the review site, without `www.`. */
+  sourceSite: string;
+  retrievedAt: string;
+  publishedAt?: string;
+  excerpt: string;
+  themes: ReviewTheme[];
+  status: "needs_review";
+}
+
+export interface ReviewMonitoringResult {
+  run: CompetitorResearchRun;
+  /** The configured business whose reviews were searched. */
+  subject: { id: string; name: string };
+  mentions: ReviewMention[];
+}
+
+export interface ReviewMonitoringResponse {
+  contractVersion: number;
+  fixtureLabel: string;
+  limitations: string[];
+  results: ReviewMonitoringResult[];
+}
+
 export interface ApiError {
   code:
     | "NOT_FOUND"

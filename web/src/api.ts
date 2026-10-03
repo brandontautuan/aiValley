@@ -7,6 +7,7 @@ import type {
   OfferTerms,
   OverviewResponse,
   Recommendation,
+  ReviewMonitoringResponse,
   ScenarioId,
   StrategyRunResponse,
 } from "../../contracts/index.ts";
@@ -49,6 +50,8 @@ export const api = {
     request<LocationOutlookResponse>("GET", `/api/locations/${locationId}/outlook?${qs({ date, scenario })}`),
   competitorResearch: (locationId: string, date: string) =>
     request<CompetitorResearchResponse>("POST", `/api/locations/${locationId}/competitor-research`, { date }),
+  reviewMonitoring: (locationId: string, date: string) =>
+    request<ReviewMonitoringResponse>("POST", `/api/locations/${locationId}/review-monitoring`, { date }),
   openRecommendation: (locationId: string, date: string, scenario: ScenarioId) =>
     request<Recommendation>("POST", "/api/recommendations", { locationId, date, scenario }),
   editRecommendation: (id: string, expectedRevision: number, terms: OfferTerms) =>

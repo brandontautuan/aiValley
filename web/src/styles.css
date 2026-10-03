@@ -322,6 +322,7 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .research-source-body { padding: 0 10px 10px; }
 .research-source-body p:last-child { margin-bottom: 0; }
 .research-claim { line-height: 1.45; }
+.review-topic { margin: 0 6px 4px 0; }
 
 .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 28px 0 14px; scroll-margin-top: 16px; }
 .section-head h2 { font-size: 1.35rem; }
@@ -682,4 +683,16 @@ main > section { animation: page-enter 210ms cubic-bezier(.22, 1, .36, 1) both; 
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* Store cards whose data calls for action get a coloured edge and a pulsing dot; steady stores stay quiet. */
+.store-card.attention-change { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.store-card.attention-hold { box-shadow: 0 0 0 2px var(--danger), var(--shadow); }
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-dot 1.6s ease-out infinite; }
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 7px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot { animation: none; }
 }

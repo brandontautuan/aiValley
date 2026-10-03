@@ -18,6 +18,7 @@ import {
   type OfferTerms,
   type OverviewResponse,
   type Recommendation,
+  type ReviewMonitoringResponse,
   type SavedPlan,
   type ScenarioId,
   type SocialDraft,
@@ -28,7 +29,7 @@ import {
 } from "../contracts/index.ts";
 import { DEFAULT_PLANNING_DATE, loadPlanningData, mockSeed, SF_COMPETITOR_PROFILES } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "../engine/index.ts";
-import { BRAND_TONE, generateExplanation, generateSocialDraft, searchCompetitorOffers, type ContentModel, type ContentPacket, type TavilySearchTransport } from "../intelligence/index.ts";
+import { BRAND_TONE, generateExplanation, generateSocialDraft, REVIEW_LIMITATIONS, searchCompetitorOffers, searchReviews, type ContentModel, type ContentPacket, type TavilySearchTransport } from "../intelligence/index.ts";
 import type { Store } from "./store.ts";
 
 export class ApiFailure extends Error {
@@ -425,6 +426,17 @@ export function createPlanner({ store, model, strategyWorkflow, tavilySearchTran
         now(),
       );
       return { contractVersion: CONTRACT_VERSION, fixtureLabel: data.fixtureLabel, results: batch.results };
+    },
+
+    /** Public review excerpts for the configured competitors; read-only context that never feeds pricing. */
+    async reviewMonitoring(locationId: string, body: { date?: unknown } = {}): Promise<ReviewMonitoringResponse> {
+      const date = parseDate(body.date);
+      const data = loadPlanningData({ date, scenario: "typical", locationId });
+      const location = data.locations.find((entry) => entry.id === locationId) ?? fail(404, "NOT_FOUND", `Unknown location ${locationId}`);
+      const subjects = SF_COMPETITOR_PROFILES[locationId] ?? [];
+      if (subjects.length === 0) fail(404, "NOT_FOUND", `No configured competitor profiles for ${locationId}`);
+      const results = await searchReviews({ locationId, locationName: `${location.name}, San Francisco`, planningDate: date, subjects }, tavilySearchTransport, now());
+      return { contractVersion: CONTRACT_VERSION, fixtureLabel: data.fixtureLabel, limitations: REVIEW_LIMITATIONS, results };
     },
 
     /** Creates a durable, approval-gated strategy run around the existing offer recommendation. */

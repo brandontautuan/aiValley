@@ -7,6 +7,7 @@ import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
 import { DecisionBar } from "./DecisionBar.tsx";
 import { CompetitorResearchPanel } from "./CompetitorResearchPanel.tsx";
+import { ReviewMonitoringPanel } from "./ReviewMonitoringPanel.tsx";
 import { DemandChart } from "./DemandChart.tsx";
 import { OptionCards } from "./OptionCards.tsx";
 import { PromotePanel } from "./PromotePanel.tsx";
@@ -60,7 +61,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
           <h1>{location.name}</h1>
           <p className="muted lead">{dateLabel(forecast.date)} · Review the suggestion, then save your decision.</p>
           <div className="feature-links">
-            <button type="button" className="feature-jump" onClick={() => document.getElementById("market-context")?.scrollIntoView({ block: "start" })}>Nearby competitors and research <UiIcon name="arrowDown" size={16} /></button>
+            <button type="button" className="feature-jump" onClick={() => document.getElementById("market-context")?.scrollIntoView({ block: "start" })}>Competitors, research and reviews <UiIcon name="arrowDown" size={16} /></button>
             <button type="button" className="feature-jump" onClick={() => document.getElementById("social-workspace")?.scrollIntoView({ block: "start" })}>Social media plan and copy <UiIcon name="arrowDown" size={16} /></button>
           </div>
         </div>
@@ -72,6 +73,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
         <>
           <RecommendationCard response={outlook.data} rec={rec} selected={selected} />
           <MarketContext data={outlook.data} date={date} />
+          <ReviewMonitoringPanel locationId={locationId} date={date} />
           <div className="review-details">
             <details className="panel disclosure">
               <summary><strong>Understand the forecast</strong><span>See when this store is busy and what may affect demand.</span></summary>

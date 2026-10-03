@@ -1,6 +1,6 @@
 # Role C Engine Framework
 
-Matches `main` @ `c35194b` (after the coffee-shop pivot and Role B's strategy runs). §0 includes the findings from the Claude Code orientation review.
+Matches `main` @ `afec173` plus this branch (coffee-shop fixtures; work items C1–C7 done). §0 was re-verified against the code and `engine/check.ts` in the final branch review.
 Role C owns `engine/**` only. Inputs and outputs are defined in `contracts/index.ts` (Role B), data comes from `data/index.ts` (Role D), and `server/planner.ts` (Role B) is the only caller.
 
 Rules: pure and deterministic, with no I/O, model calls, clock reads or env vars. Money is in integer cents, orders are separate from item units, and every assumption is labeled.
@@ -11,16 +11,16 @@ Rules: pure and deterministic, with no I/O, model calls, clock reads or env vars
 
 Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the design unless it's marked **optional**.
 
-| DESIGN.md §9 requirement | Status on main | Work item |
+| DESIGN.md §9 requirement | Status (verified in final review) | Open item |
 | --- | --- | --- |
 | Units by location/weekday/hour over comparable weeks; orders computed separately | ✅ | — |
 | Exclude closed periods; identify prior promotions | ✅ | — |
 | Sparse history → **documented daypart fallback** + sample count | ✅ daypart fallback (`DAYPARTS`), weekday/weekend split; quality and count use the worse of order and item history (C6 done) | — |
 | `scenario_units = baseline × (1 + adj)`, bounded, correlated signals deduped | ✅ (`dedupeKey`, clamp) | — |
 | Separate order adjustment for capacity | ✅ | — |
-| Raw demand shown separately from serviceable orders | ✅ | — |
-| Holiday effects location-specific or labeled | ✅ via fixtures + `ENGINE_ASSUMPTIONS` | — |
-| Always include regular price; evaluate 5% and 10% | ✅ | — |
+| Raw demand shown separately from serviceable orders | ✅ for orders (`scenarioOrders` vs `serviceableOrders`). ⚠️ for item units only the serviceable value is exposed | request to B (optional) |
+| Holiday effects location-specific or labeled | ✅ signals apply only to their listed locations and are labeled assumptions; the one holiday fixture carries a zero adjustment, so it changes nothing | — |
+| Always include regular price; evaluate 5% and 10%; a high-demand branch may get no change | ✅ (Arena event day keeps price) | — |
 | One predefined bundle **if agreed** | ✅ the default item (Coffee & Pastry Pair) is a predefined bundle; its cost covers all components and the cannibalization limit is labeled via `BUNDLE_LIMITATION` (C3 done). Per-candidate attachment needs a contract field | request to B (optional) |
 | Contribution, break-even, reject nonpositive before dividing | ✅ | — |
 | Break-even formula uses `baseline_units` | ⚠️ **deliberate deviation**: uses scenario-adjusted reference units (documented in `contracts/index.ts`), so the offer is compared against the same day's expected demand. Kept, and stated in `ENGINE_ASSUMPTIONS` (C6 done). | — |
@@ -28,9 +28,13 @@ Every item here traces to a DESIGN.md requirement. Nothing adds scope beyond the
 | Report missing costs **and substitution/cannibalization limitations** | ✅ `MISSING_COST` is an error on discounts and a warning on keep-price; cannibalization stated in `ENGINE_ASSUMPTIONS` (C6 done) | — |
 | Demand response is explicit low/base/high assumption, no learned elasticity | ✅ low +0%, base 1.5×, high 3× the discount % (C1 done) | — |
 | Cautious trial/no-change when response evidence is missing | ✅ keep-price by default; optional cautious 5% trial behind `ENGINE_POLICY.sparseTrial` (C4 done) | — |
-| Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ (no customer-level inputs exist) | — |
+| Guardrails: 10% max, fresh costs + floor, eligibility, hours, overlap, capacity flag, no individualized pricing | ✅ every code is asserted in `engine/check.ts`; items with `offerEligible: false` cannot be discounted; no customer-level inputs exist | — |
 | Overlap check includes **channel** | ⚠️ ignored, because `OfferTerms` has no channel field | request to B (optional) |
-| Checks: $14, closed hours, missing cost, overlap, discount limit, sparse, event hours, arena no-change | ✅ all present; the $14 example also runs end to end through `evaluateOffers` (C7 done) | — |
+| "Done when" checks: $14, closed hours, missing cost, overlap, discount limit, sparse, event hours, arena no-change | ✅ all present; the $14 example also runs end to end through `evaluateOffers` (C7 done) | — |
+
+Outside §9, two things do not match the wider design and are not the engine's to fix (requests in `HANDOFF.md`):
+- `README.md` demo script still says Downtown gets a discount trial; since C1 the engine keeps price there (Role A).
+- DESIGN.md §15 expects three distinct decisions; on a typical day all three locations keep price, for different reasons (team lead / Role D).
 
 Architecture stays as the design defines it:
 - one backend
@@ -72,6 +76,9 @@ B calls `evaluateOffers` with edited terms on every edit and re-runs it before a
 | `discountedPriceCents(regular, pct)` | `Math.round(regular × (100 − pct) / 100)` | — |
 | `breakEvenUnits(ref, regular, proposed, cost)` | `ceil(ref × (regular − cost) / (proposed − cost))`, null if ≤ 0 | — |
 | `ENGINE_ASSUMPTIONS` | labels shown to the manager | `string[]` |
+| `selectionFacts(candidates, outlook)` | reason code + the numbers behind the selection | engine type `SelectionFacts` (not in contracts yet) |
+| `ENGINE_POLICY`, `DAYPARTS` | every tunable; the daypart table | — |
+| `BUNDLE_LIMITATION`, `candidateLimitations(data, candidate)` | bundle note and per-candidate helper | — |
 | `toLocalKey(iso, tz)` | local `YYYY-MM-DDTHH:mm` for window comparisons | — |
 
 Changing any export's shape needs Role B's agreement first, since B, A and D all depend on it.
@@ -111,7 +118,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 - $14 example via `discountedPriceCents`/`breakEvenUnits` and end to end through `evaluateOffers` on a minimal inline dataset, and the nonpositive contribution guard
 - Downtown's soft window is 14:00–17:00 on the Coffee & Pastry Pair, but since C1 neither 5% nor 10% reaches break-even in the base scenario, so Downtown keeps price. The check asserts the exact response values and that outcome.
 - The Arena event changes only Arena 16:00–20:00 and isn't double-counted; Arena keeps price, and its discounts are flagged with `CAPACITY_CONFLICT`
-- Every guardrail code except `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning, which no check asserts
+- Every guardrail code, including `INVALID_DISCOUNT` and the `SPARSE_HISTORY` warning
 - Capacity cap: Arena event-day units follow serviceable orders and no discount scenario exceeds serviceable units; Downtown's typical-day numbers are asserted unchanged
 - Sparse fallback: daypart averages are used and reported, baselines stay positive, selection keeps price; item-only sparse history is reported separately
 - `MISSING_COST` warning on keep-price
@@ -120,7 +127,7 @@ Only `ITEM_NOT_ELIGIBLE`, `INVALID_WINDOW` and `CLOSED_HOURS` are checked on eve
 
 ## 4. Work queue
 
-Order: **C1, C2, C6, C7, C4, C3 are done.** Only optional **C5** remains, and only if the team agrees.
+Order: **all work items (C1–C7) are done.** What remains are the optional contract requests to B in `HANDOFF.md`.
 
 ### C1. Make the response assumptions conservative (engine-only) — DONE
 Outcome: no discount is selected anywhere on the current fixtures. Base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price; every offer-eligible fixture item is at 35% or more (Drip Coffee is 25% but is not offer-eligible). `server/check.ts` still expects a Downtown discount and fails until B and D decide the demo story (see `HANDOFF.md`).
@@ -157,7 +164,10 @@ Original brief:
 - The design suggests a *cautious trial* for low evidence instead of a flat keep-price. Option: allow only the smallest discount (5%) when evidence is sparse and the window is soft. Keep it off if the team prefers a stricter demo.
 - Move tunables (`ADJUSTMENT_BOUNDS`, `CLASSIFICATION_THRESHOLD`, `SOFT_WINDOW_SHARE`, response values) into one exported `ENGINE_POLICY` constant. The UI can then show them, and later B could move them into `ChainPolicy`.
 
-### C5. Structured reason for D (optional, beyond the design; only if the team agrees; needs Role B)
+### C5. Structured reason for D (optional, beyond the design; only if the team agrees; needs Role B) — DONE (engine side)
+Outcome: exported `selectionFacts(candidates, outlook)` returns the code and facts today with no contract change; the request to add them to `Selection` is in `HANDOFF.md`.
+
+Original brief:
 `Selection.reason` is free text. D has to explain it without inventing numbers.
 - **Ask B:** add `reasonCode` + `reasonFacts` (e.g. `{ breakEvenUnits, baseUnits, peakOrders, capacity }`) to `Selection`. Keep `reason` for display.
 - Codes: `CAPACITY_PEAK`, `SPARSE_HISTORY`, `DISCOUNT_CLEARS_BREAK_EVEN`, `NO_DISCOUNT_CLEARS_BREAK_EVEN`, `DEMAND_WITHIN_USUAL`.

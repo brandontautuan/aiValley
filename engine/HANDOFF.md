@@ -5,6 +5,7 @@
 - `calculateLocationOutlook(data, request)`: same-weekday/hour baseline over up to 8 weeks, excluding promotion hours. An hour with fewer than 4 same-weekday observations falls back to the average hour of its daypart (see `DAYPARTS`) across weekdays or weekends. `evidenceQuality` is the worse of order and item history, `observationCount` is the smallest sample across both, and `notes` says which history was sparse and which dayparts were used. Applies context adjustments deduplicated by `dedupeKey` and bounded to [-50%, +100%], plus capacity, classification, and the focus window (softest 3-hour window, or the constrained peak). When an hour's scenario orders exceed capacity, each item's `scenarioUnits` for that hour is scaled by `serviceableOrders / scenarioOrders` and a note is added to `notes`; unconstrained hours are unchanged.
 - `evaluateOffers(data, outlook, terms?, existingOffers?)`: keep-price, 5% off and 10% off, or the edited terms. Applies all guardrails from DESIGN.md §9. A discount on an item with `offerEligible: false` (Drip Coffee) is rejected with `ITEM_NOT_ELIGIBLE`; keeping its price is allowed. A keep-price candidate whose item has no known cost carries `MISSING_COST` as a warning and stays valid. Each discount carries low/base/high response scenarios: low = +0% units (no response), base = 1.5 × the discount %, high = 3 × the discount % (10% off → +0 / +15 / +30%). These are assumptions, not learned elasticity. `ResponseScenario`'s shape is unchanged. Response units are capped per hour so the implied orders never exceed capacity (orders are assumed to move in proportion to the item's units); `referenceUnits` is the serviceable figure.
 - `selectRecommendedCandidate(candidates, outlook, policy?)`: keep-price for capacity peaks, sparse history or a normal day; otherwise the best valid discount whose base scenario clears break-even, or keep-price when none does. The optional third argument defaults to `ENGINE_POLICY`; existing two-argument callers behave exactly as before. With `{ sparseTrial: true }`, sparse history plus a soft window may select the smallest discount only (5%), and only if its base scenario clears break-even.
+- `selectionFacts(candidates, outlook, policy?)`: the same decision as `selectRecommendedCandidate` (both read one shared rule), returned as `{ selectedCandidateId, reasonCode, comparedCandidateId, reasonFacts: { breakEvenUnits, baseUnits, referenceUnits, peakOrders, capacity } }`. Unit facts describe the selected discount; for keep-price they describe the discount closest to its break-even (`comparedCandidateId`). Types `SelectionReasonCode` and `SelectionFacts` are exported from the engine until the contract carries them.
 - `BUNDLE_LIMITATION` and `candidateLimitations(data, candidate)`: the bundle note (variable cost covers every component; switching from the separate items to the bundle is not modeled) and a pure helper returning it for candidates whose item has category `bundle`. The note is also a line in `ENGINE_ASSUMPTIONS`.
 - `ENGINE_POLICY`: every tunable in one object (`comparableWeeks`, `minObservations`, `adjustmentBounds`, `focusWindowHours`, `softWindowShare`, `classificationThreshold`, `responsePerDiscountPct`, `dayparts`, `sparseTrial`). `sparseTrial` is `false` by default. `DAYPARTS` is the same array as `ENGINE_POLICY.dayparts`.
 - `DAYPARTS`: morning (open–11:00), lunch (11:00–14:00), afternoon (14:00–17:00), dinner (17:00–close).
@@ -22,7 +23,7 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
 ## Checks completed
 - The $14 / $5 / 20-unit example gives 1260¢ price, 760¢ contribution, 24-unit break-even and 19,760¢ at 26 units, both as plain arithmetic and end to end through `evaluateOffers` on a minimal inline dataset (C7).
 - Response assumptions: +0 / +7.5 / +15% at 5% off and +0 / +15 / +30% at 10% off; the low scenario keeps reference units and loses contribution.
-- Guardrails: ceiling, closed hours, invalid window, stale cost, missing cost, nonpositive and below-minimum contribution, eligibility, overlap.
+- Guardrails: ceiling, invalid discount (fractional, negative, 100%), closed hours, invalid window, stale cost, missing cost, nonpositive and below-minimum contribution, eligibility, overlap.
 - The arena event affects only arena hours 16–20 and duplicate records aren't stacked; the arena gets a keep-price decision. `CAPACITY_CONFLICT` still uses the high scenario (now +30% at 10% off) and still flags both arena discounts.
 - Downtown (soft window 14:00–17:00, Coffee & Pastry Pair) now gets keep-price: base units stay below break-even for both 5% and 10%.
 - Capacity cap (C2), Arena event day: only 18:00 exceeds capacity (40.4 vs 40 orders) and its item units are scaled by the serviceable share; other hours equal raw demand. No discount scenario exceeds the window's serviceable units (about 56.8 for the Coffee & Pastry Pair, 17:00–20:00), so 10% off high is 56.8 units, not 68.8, and both break-evens (58 and 63) are out of reach within capacity.
@@ -31,6 +32,7 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
 - Item-only sparse history marks the outlook sparse, leaves order baselines untouched, adds the item-history note and puts `SPARSE_HISTORY` on discounts.
 - `ENGINE_POLICY` values are asserted, and the cautious trial is covered with both settings: off keeps price; on picks 5% (never 10%) for a low-cost, high-volume item on sparse history, still keeps price at fixture costs, and changes nothing when history is good or capacity is the concern.
 - Bundles and eligibility (C3): every default candidate is the Coffee & Pastry Pair and carries the bundle note; a non-bundle item carries none; Drip Coffee never gets a default candidate and an edited discount on it is rejected; the Weekend Breakfast Set appears only in Residential's outlook and is rejected elsewhere.
+- `selectionFacts` (C5): always agrees with `selectRecommendedCandidate`; Downtown gives `NO_DISCOUNT_CLEARS_BREAK_EVEN` with 15 / 14.5 / 13.5 units and 48 of 55 orders, Arena event day `CAPACITY_PEAK`, Residential `DEMAND_WITHIN_USUAL`, sparse history `SPARSE_HISTORY`, and a clearing discount (and the cautious trial) `DISCOUNT_CLEARS_BREAK_EVEN`.
 - Missing cost: error on the discount, warning on keep-price (still valid); no issue when cost is known.
 
 ## Dependencies requested from other roles
@@ -53,6 +55,28 @@ See `engine/FRAMEWORK.md` for design alignment, as-built behavior and the work q
   Reason and affected callers: DESIGN.md §9 "Bundles include every component's variable cost. Report … substitution/cannibalization limitations"; callers: server/planner.ts, web OfferTable, intelligence packets
   Temporary behavior while waiting: the note is in ENGINE_ASSUMPTIONS (already shown via Recommendation.assumptions); callers that want it per candidate can call engine `candidateLimitations(data, candidate)`
   ```
+- **B (contract request, optional):** `Selection.reason` is free text, so D has to explain the decision from a sentence. The engine can already supply a code and the numbers.
+  ```text
+  Needed change: Selection add `reasonCode` and `reasonFacts`
+  Owning role/path: B, contracts/index.ts
+  Current contract/version: 1
+  Proposed input/output:
+    reasonCode: "CAPACITY_PEAK" | "SPARSE_HISTORY" | "DISCOUNT_CLEARS_BREAK_EVEN" | "NO_DISCOUNT_CLEARS_BREAK_EVEN" | "DEMAND_WITHIN_USUAL"
+    reasonFacts: { breakEvenUnits: number | null; baseUnits: number | null; referenceUnits: number; peakOrders: number; capacity: number }
+    (keep `reason` for display; optionally also `comparedCandidateId: string | null`)
+  Reason and affected callers: lets D explain the decision without parsing text or inventing numbers (DESIGN.md §10). Callers: server/planner.ts (store on Recommendation), intelligence packets, web
+  Temporary behavior while waiting: call engine `selectionFacts(candidates, outlook)` next to `selectRecommendedCandidate`; it returns exactly these values today, with no contract change
+  ```
+- **A (README):**
+  ```text
+  Needed change: README.md demo script steps 1–2 say "Downtown gets a discount trial" and show "the 10%-off break-even threshold" as the recommendation
+  Owning role/path: A, README.md
+  Current contract/version: 1
+  Proposed input/output: step 1: all three stores keep the regular price on a typical day, each for a different reason; step 2: Downtown shows the soft 2–5 p.m. window and both break-even thresholds (15 units at 5% off, 16 at 10% off) that the cautious response assumptions do not reach; step 3 (manager edits in a 5% trial, recalculates, approves) still works as written
+  Reason and affected callers: since C1 the engine recommends keep-price at Downtown; the script no longer matches the app
+  Temporary behavior while waiting: none needed; the app itself is correct
+  ```
+- **Team lead:** DESIGN.md §15 says "three branches receive distinct, context-appropriate decisions". On a typical day all three keep price (Downtown: no discount clears break-even; Arena and Residential: demand within the usual range). On the event day Arena keeps price because of capacity. Decide whether that is distinct enough, or pick one of the options in the next item.
 - **D / team lead:** decide the demo story. Under these assumptions no fixture item can earn a discount recommendation: base response clears break-even only when variable cost is at most about 23% (10% off) or 28% (5% off) of price, and every offer-eligible fixture item is at 35% or more (after the coffee-shop pivot too). Options: accept keep-price at Downtown and show the discount as a manager-edited trial, or change the selection policy (FRAMEWORK.md C4).
 
 ## Known blockers and fallback behavior

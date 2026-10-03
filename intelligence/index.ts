@@ -1,7 +1,9 @@
 import type { CompetitorOffer, ContextSignal, Explanation, Location, LocationOutlook, OfferCandidate, SocialDraft } from "../contracts/index.ts";
 import { CHAIN } from "../data/fixtures.ts";
+import { localIso } from "../data/mock.ts";
 
 export * from "./competitorResearch.ts";
+export * from "./reviewMonitoring.ts";
 export * from "./tavilySearchTransport.ts";
 
 /**
@@ -109,9 +111,7 @@ const POSTING_LEAD_HOURS = 3;
 function postAt(packet: ContentPacket): string {
   const { window } = packet.selected.terms;
   const hour = Math.max(window.startHour - POSTING_LEAD_HOURS, 7);
-  // Fixtures use America/Los_Angeles; October dates are in daylight time.
-  const offset = packet.location.timezone === "America/Los_Angeles" ? "-07:00" : "Z";
-  return `${window.date}T${String(hour).padStart(2, "0")}:00:00${offset}`;
+  return localIso(window.date, hour, packet.location.timezone);
 }
 
 function templateSocial(packet: ContentPacket): Pick<SocialDraft, "caption" | "creativeBrief"> {

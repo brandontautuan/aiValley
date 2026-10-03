@@ -452,49 +452,106 @@ export function evaluateOffers(data: PlanningData, outlook: LocationOutlook, ter
 const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const hourLabel = (window: OfferWindow) => `${window.startHour}:00–${window.endHour}:00`;
 
-/**
- * Deterministic selection. Keeping the regular price is a valid outcome.
- * `policy` defaults to ENGINE_POLICY; pass `{ sparseTrial: true }` to allow the cautious trial.
- */
-export function selectRecommendedCandidate(candidates: OfferCandidate[], outlook: LocationOutlook, policy: Pick<typeof ENGINE_POLICY, "sparseTrial"> = ENGINE_POLICY): Selection {
-  const noChange = candidates.find((candidate) => candidate.kind === "no-change")!;
-  const window = hourLabel(outlook.focusWindow);
+type SelectionPolicy = Pick<typeof ENGINE_POLICY, "sparseTrial">;
 
-  if (outlook.focusReason === "capacity-peak") {
-    const peak = Math.max(...outlook.hours.map((hour) => hour.scenarioOrders));
-    return {
-      selectedCandidateId: noChange.id,
-      reason: `Keep the regular price ${window}: demand peaks near ${peak} orders/hour against capacity of ${outlook.hours[0].capacityOrders}. A discount would add orders the kitchen cannot serve.`,
-    };
-  }
+export type SelectionReasonCode = "CAPACITY_PEAK" | "SPARSE_HISTORY" | "DISCOUNT_CLEARS_BREAK_EVEN" | "NO_DISCOUNT_CLEARS_BREAK_EVEN" | "DEMAND_WITHIN_USUAL";
+
+/** Structured form of a selection, for explaining it without re-deriving or inventing numbers. */
+export interface SelectionFacts {
+  selectedCandidateId: string;
+  reasonCode: SelectionReasonCode;
+  /** The discount the unit facts describe: the selected one, else the discount closest to its break-even. Null when there is none. */
+  comparedCandidateId: string | null;
+  reasonFacts: {
+    /** Units the compared discount needs to match keep-price contribution. Null when not computable. */
+    breakEvenUnits: number | null;
+    /** Units the compared discount is assumed to sell in the base scenario. An assumption, not a forecast. */
+    baseUnits: number | null;
+    /** Units expected in the window at the regular price. */
+    referenceUnits: number;
+    /** Busiest hour's expected orders on the planning date. */
+    peakOrders: number;
+    /** Hourly order capacity at that busiest hour. */
+    capacity: number;
+  };
+}
+
+const baseScenario = (candidate: OfferCandidate) => candidate.responseScenarios.find((scenario) => scenario.label === "base");
+const clearsBreakEven = (candidate: OfferCandidate) => {
+  const base = baseScenario(candidate);
+  return candidate.breakEvenUnits !== null && base !== undefined && base.units >= candidate.breakEvenUnits;
+};
+const usable = (candidate: OfferCandidate) => candidate.kind === "discount" && candidate.valid && !candidate.issues.some((issue) => issue.code === "CAPACITY_CONFLICT");
+
+/** The one place the selection rule lives; the reason text and the structured facts both read from it. */
+function decide(candidates: OfferCandidate[], outlook: LocationOutlook, policy: SelectionPolicy): { selected: OfferCandidate; code: SelectionReasonCode; cautiousTrial: boolean } {
+  const noChange = candidates.find((candidate) => candidate.kind === "no-change")!;
+  if (outlook.focusReason === "capacity-peak") return { selected: noChange, code: "CAPACITY_PEAK", cautiousTrial: false };
   if (outlook.evidenceQuality === "sparse") {
     if (policy.sparseTrial && outlook.focusReason === "soft-window") {
       // Cautious trial: only the smallest discount on offer, and only if its base scenario clears break-even.
       const smallest = candidates.filter((candidate) => candidate.kind === "discount").sort((a, b) => a.terms.discountPct - b.terms.discountPct)[0];
-      const base = smallest?.responseScenarios.find((scenario) => scenario.label === "base");
-      if (smallest && base && smallest.valid && !smallest.issues.some((issue) => issue.code === "CAPACITY_CONFLICT") && smallest.breakEvenUnits !== null && base.units >= smallest.breakEvenUnits) {
-        return {
-          selectedCandidateId: smallest.id,
-          reason: `Cautious trial of ${smallest.terms.discountPct}% off ${smallest.itemName} ${window}: history is sparse, so only the smallest discount is considered. At ${dollars(smallest.proposedPriceCents)} it needs at least ${smallest.breakEvenUnits} units vs. about ${smallest.referenceUnits} expected at the regular price. Both the baseline and the demand response are assumptions to test.`,
-        };
-      }
+      if (smallest && usable(smallest) && clearsBreakEven(smallest)) return { selected: smallest, code: "DISCOUNT_CLEARS_BREAK_EVEN", cautiousTrial: true };
     }
-    return { selectedCandidateId: noChange.id, reason: "Keep the regular price: history is too sparse to justify a discount." };
+    return { selected: noChange, code: "SPARSE_HISTORY", cautiousTrial: false };
   }
   if (outlook.focusReason === "soft-window") {
     const viable = candidates
-      .filter((candidate) => candidate.kind === "discount" && candidate.valid && !candidate.issues.some((issue) => issue.code === "CAPACITY_CONFLICT"))
-      .map((candidate) => ({ candidate, base: candidate.responseScenarios.find((scenario) => scenario.label === "base")! }))
-      .filter(({ candidate, base }) => candidate.breakEvenUnits !== null && base.units >= candidate.breakEvenUnits)
-      .sort((a, b) => b.base.contributionCents - a.base.contributionCents);
-    if (viable.length) {
-      const { candidate } = viable[0];
-      return {
-        selectedCandidateId: candidate.id,
-        reason: `Trial ${candidate.terms.discountPct}% off ${candidate.itemName} ${window}: this is the softest window of the day. At ${dollars(candidate.proposedPriceCents)} it needs at least ${candidate.breakEvenUnits} units vs. about ${candidate.referenceUnits} expected at the regular price. The demand response is an assumption to test.`,
-      };
-    }
-    return { selectedCandidateId: noChange.id, reason: `Keep the regular price ${window}: no discount clears its break-even threshold under the assumed response.` };
+      .filter((candidate) => usable(candidate) && clearsBreakEven(candidate))
+      .sort((a, b) => baseScenario(b)!.contributionCents - baseScenario(a)!.contributionCents);
+    if (viable.length) return { selected: viable[0], code: "DISCOUNT_CLEARS_BREAK_EVEN", cautiousTrial: false };
+    return { selected: noChange, code: "NO_DISCOUNT_CLEARS_BREAK_EVEN", cautiousTrial: false };
   }
-  return { selectedCandidateId: noChange.id, reason: `Keep the regular price: demand is within the usual range (${Math.round(outlook.changeVsUsual * 100)}% vs. usual) and no window is unusually soft.` };
+  return { selected: noChange, code: "DEMAND_WITHIN_USUAL", cautiousTrial: false };
+}
+
+/**
+ * Deterministic selection. Keeping the regular price is a valid outcome.
+ * `policy` defaults to ENGINE_POLICY; pass `{ sparseTrial: true }` to allow the cautious trial.
+ */
+export function selectRecommendedCandidate(candidates: OfferCandidate[], outlook: LocationOutlook, policy: SelectionPolicy = ENGINE_POLICY): Selection {
+  const { selected, code, cautiousTrial } = decide(candidates, outlook, policy);
+  const window = hourLabel(outlook.focusWindow);
+  const needs = `At ${dollars(selected.proposedPriceCents)} it needs at least ${selected.breakEvenUnits} units vs. about ${selected.referenceUnits} expected at the regular price.`;
+  const reasons: Record<SelectionReasonCode, () => string> = {
+    CAPACITY_PEAK: () =>
+      `Keep the regular price ${window}: demand peaks near ${Math.max(...outlook.hours.map((hour) => hour.scenarioOrders))} orders/hour against capacity of ${outlook.hours[0].capacityOrders}. A discount would add orders the kitchen cannot serve.`,
+    SPARSE_HISTORY: () => "Keep the regular price: history is too sparse to justify a discount.",
+    DISCOUNT_CLEARS_BREAK_EVEN: () =>
+      cautiousTrial
+        ? `Cautious trial of ${selected.terms.discountPct}% off ${selected.itemName} ${window}: history is sparse, so only the smallest discount is considered. ${needs} Both the baseline and the demand response are assumptions to test.`
+        : `Trial ${selected.terms.discountPct}% off ${selected.itemName} ${window}: this is the softest window of the day. ${needs} The demand response is an assumption to test.`,
+    NO_DISCOUNT_CLEARS_BREAK_EVEN: () => `Keep the regular price ${window}: no discount clears its break-even threshold under the assumed response.`,
+    DEMAND_WITHIN_USUAL: () => `Keep the regular price: demand is within the usual range (${Math.round(outlook.changeVsUsual * 100)}% vs. usual) and no window is unusually soft.`,
+  };
+  return { selectedCandidateId: selected.id, reason: reasons[code]() };
+}
+
+/**
+ * The same decision as selectRecommendedCandidate, as a reason code plus the numbers behind it.
+ * Lets callers explain the selection without parsing `reason` or inventing figures.
+ */
+export function selectionFacts(candidates: OfferCandidate[], outlook: LocationOutlook, policy: SelectionPolicy = ENGINE_POLICY): SelectionFacts {
+  const { selected, code } = decide(candidates, outlook, policy);
+  // Unit facts describe the selected discount; for keep-price, the discount that comes closest to its break-even.
+  const shortfall = (candidate: OfferCandidate) => candidate.breakEvenUnits! - baseScenario(candidate)!.units;
+  const compared =
+    selected.kind === "discount"
+      ? selected
+      : candidates
+          .filter((candidate) => candidate.kind === "discount" && candidate.breakEvenUnits !== null && baseScenario(candidate) !== undefined)
+          .sort((a, b) => shortfall(a) - shortfall(b) || a.terms.discountPct - b.terms.discountPct)[0];
+  const peak = outlook.hours.reduce((best, hour) => (hour.scenarioOrders > best.scenarioOrders ? hour : best), outlook.hours[0]);
+  return {
+    selectedCandidateId: selected.id,
+    reasonCode: code,
+    comparedCandidateId: compared?.id ?? null,
+    reasonFacts: {
+      breakEvenUnits: compared?.breakEvenUnits ?? null,
+      baseUnits: compared ? (baseScenario(compared)?.units ?? null) : null,
+      referenceUnits: selected.referenceUnits,
+      peakOrders: peak.scenarioOrders,
+      capacity: peak.capacityOrders,
+    },
+  };
 }
