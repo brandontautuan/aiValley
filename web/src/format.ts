@@ -41,3 +41,14 @@ export const CLASSIFICATION_LABEL: Record<DemandClassification, string> = {
   busy: "Above usual",
   constrained: "At capacity",
 };
+
+/** Seed of a `mock-<seed>` scenario, or null for the curated fixtures. */
+export function mockSeedOf(scenario: string): number | null {
+  const match = /^mock-(\d{1,9})$/.exec(scenario);
+  return match ? Number(match[1]) : null;
+}
+
+export function scenarioLabel(scenario: string): string {
+  const seed = mockSeedOf(scenario);
+  return seed !== null ? `Mock data #${seed}` : scenario === "local-event" ? "Local event day" : "Typical day";
+}

@@ -14,7 +14,8 @@
 export const CONTRACT_VERSION = 1;
 
 export type Cents = number;
-export type ScenarioId = "typical" | "local-event";
+/** `mock-<seed>` selects a randomly generated, fictional dataset that is stable for a given seed. */
+export type ScenarioId = "typical" | "local-event" | `mock-${number}`;
 export type RecommendationStatus = "draft" | "approved" | "dismissed";
 export type GenerationSource = "model" | "template";
 export type SourceLabel = "fixture" | "public-web" | "manager";

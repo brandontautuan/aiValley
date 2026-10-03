@@ -1,11 +1,10 @@
 import type { LocationOutlookResponse, OverviewResponse, SavedPlan, ScenarioId } from "../../../contracts/index.ts";
 import { api } from "../api.ts";
-import { dateLabel, hour, pct, units, windowLabel } from "../format.ts";
+import { dateLabel, pct, scenarioLabel } from "../format.ts";
 import { actionLabel, selectedCandidate, storeSentence } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
 import { MiniChart } from "./MiniChart.tsx";
-import { ScenarioToggle } from "./ScenarioToggle.tsx";
 
 interface TodayData {
   overview: OverviewResponse;
@@ -16,142 +15,76 @@ interface TodayData {
 async function loadToday(date: string, scenario: ScenarioId): Promise<TodayData> {
   const [overview, plan] = await Promise.all([api.overview(date, scenario), api.actionPlan(date)]);
   const outlooks = await Promise.all(overview.locations.map((summary) => api.outlook(summary.location.id, date, scenario)));
-  return {
-    overview,
-    outlooks: Object.fromEntries(outlooks.map((outlook) => [outlook.location.id, outlook])),
-    plans: plan.plans.filter((entry) => !entry.superseded),
-  };
+  return { overview, outlooks: Object.fromEntries(outlooks.map((outlook) => [outlook.location.id, outlook])), plans: plan.plans.filter((entry) => !entry.superseded) };
 }
 
-export function Today({ date, scenario, onScenario }: { date: string; scenario: ScenarioId; onScenario: (value: ScenarioId) => void }) {
-  const { data, error, loading } = useLoad(() => loadToday(date, scenario), [date, scenario]);
+export function Today({ date, scenario }: { date: string; scenario: ScenarioId }) {
+  const { data, error, reload } = useLoad(() => loadToday(date, scenario), [date, scenario]);
   const weekday = dateLabel(date).split(",")[0];
-
   const head = (
-    <div className="hero">
+    <div className="hero daily-hero">
       <div>
-        <h1>What should each store do on {weekday}?</h1>
-        <p className="muted lead">Each store gets its own decision. Keeping the regular price is a valid one.</p>
-      </div>
-      <div className="hero-control">
-        <span className="eyebrow">Scenario</span>
-        <ScenarioToggle value={scenario} onChange={onScenario} />
+        <span className="eyebrow">{dateLabel(date)}</span>
+        <h1>A clear plan for each store.</h1>
+        <p className="muted lead">Choose a store, review its suggestion, then approve your plan.</p>
       </div>
     </div>
   );
-
-  if (error) return <>{head}<p className="error">{error}</p></>;
-  if (!data) return <>{head}<p className="muted">Loading the chain…</p></>;
-
+  if (error) return <>{head}<div className="error" role="alert"><p>We couldn’t load the stores. {error}</p><button onClick={reload}>Try again</button></div></>;
+  if (!data) return <>{head}<p role="status" className="muted">Finding suggestions for your stores…</p></>;
   const summaries = data.overview.locations;
-  const outlooks = summaries.map((summary) => data.outlooks[summary.location.id]);
-  const promotions = summaries.filter((summary) => summary.selectedKind === "discount");
-  const constrained = summaries.filter((summary) => summary.classification === "constrained");
-  const changes = outlooks.flatMap((outlook) =>
-    outlook.contextSignals
-      .filter((signal) => signal.type === "event" && outlook.outlook.appliedSignalIds.includes(signal.id))
-      .slice(0, 1)
-      .map((signal) => {
-        const affected = outlook.outlook.hours.filter((entry) => entry.signalIds.includes(signal.id));
-        return { id: signal.id, text: `${outlook.location.name} ${hour(affected[0].hour)}–${hour(affected[affected.length - 1].hour + 1)}: ${pct(signal.assumedOrderAdjustment)} assumed (${signal.source.replace(/^Fixture: /, "")})` };
-      }),
-  );
-  const unchanged = outlooks.filter((outlook) => !outlook.contextSignals.some((signal) => signal.type === "event" && outlook.outlook.appliedSignalIds.includes(signal.id)));
+  const savedLocations = new Set(data.plans.map((plan) => plan.locationId));
+  const savedCount = summaries.filter((summary) => savedLocations.has(summary.location.id)).length;
 
   return (
-    <section className={loading ? "loading" : ""}>
+    <section>
       {head}
-      {scenario === "local-event" && (
-        <div className="chips">
-          {changes.length === 0 && <span className="chip neutral">No event records apply to {weekday}.</span>}
-          {changes.map((change) => (
-            <span key={change.id} className="chip info">What changed: {change.text}</span>
-          ))}
-          {changes.length > 0 && unchanged.length > 0 && (
-            <span className="chip neutral">{unchanged.map((outlook) => outlook.location.name).join(" and ")} unchanged</span>
-          )}
-        </div>
-      )}
-
-      <div className="pills">
-        <div className="pill-card">
-          <span className="pill-num accent">{promotions.length}</span>
-          <span>
-            {promotions.length === 1 ? "promotion" : "promotions"} to review
-            <br />
-            <span className="muted small">{promotions.map((summary) => summary.location.name).join(", ") || "No quiet windows today"}</span>
-          </span>
-        </div>
-        <div className="pill-card">
-          <span className={`pill-num ${constrained.length ? "danger" : ""}`}>{constrained.length}</span>
-          <span>
-            {constrained.length === 1 ? "store" : "stores"} at capacity
-            <br />
-            <span className="muted small">{constrained.map((summary) => `${summary.location.name} ${windowLabel(summary.focusWindow)}`).join(", ") || "All stores below 90% of capacity"}</span>
-          </span>
-        </div>
-        <div className="pill-card">
-          <span className="pill-num">
-            {data.plans.length}
-            <span className="muted pill-of">/{summaries.length}</span>
-          </span>
-          <span>
-            plans saved for {weekday}
-            <br />
-            <a className="small" href={hrefFor("/plan", { date, scenario })}>Open the action plan →</a>
-          </span>
-        </div>
+      <div className="planning-progress">
+        <span><strong>{savedCount} of {summaries.length} stores</strong> have a saved plan for this date</span>
+        <a href={hrefFor("/plan", { date, scenario })}>View saved plans →</a>
       </div>
-
-      <div className="cards">
-        {summaries.map((summary, index) => {
+      <div className="cards store-cards">
+        {summaries.map((summary) => {
           const outlook = data.outlooks[summary.location.id];
-          const selected = selectedCandidate(outlook);
-          const saved = data.plans.some((plan) => plan.locationId === summary.location.id);
-          const chip = saved
-            ? { label: "Saved", cls: "ok" }
-            : selected.kind === "discount"
-              ? { label: "Needs review", cls: "ok" }
-              : summary.classification === "constrained"
-                ? { label: "At capacity", cls: "danger" }
-                : { label: "Steady", cls: "" };
+          const savedPlan = data.plans.find((plan) => plan.locationId === summary.location.id);
+          const selected = savedPlan?.finalTerms ?? selectedCandidate(outlook);
+          const saved = Boolean(savedPlan);
+          // What the data asks of the manager: a price change, protecting a busy peak, or nothing.
+          const attention = saved ? null : selected.kind === "discount" ? "change" : summary.classification === "constrained" ? "hold" : null;
           return (
-            <article key={summary.location.id} className="card store-card">
+            <article key={summary.location.id} className={`card store-card ${attention ? `attention-${attention}` : ""}`}>
               <div className="card-head">
-                <span className="rank">{index + 1}</span>
                 <h2>{summary.location.name}</h2>
-                <span className={`badge ${chip.cls}`}>{chip.label}</span>
+                <span className={`badge ${saved || attention === "change" ? "ok" : attention === "hold" ? "danger" : ""}`}>
+                  {attention && <span className="pulse-dot" aria-hidden />}
+                  {saved ? "Plan saved" : attention === "change" ? "Change suggested" : attention === "hold" ? "Busy peak · hold price" : "No change needed"}
+                </span>
               </div>
-              <p className="sentence">{storeSentence(outlook)}</p>
-              <MiniChart
-                hours={outlook.outlook.hours}
-                highlight={selected.kind === "discount" ? selected.terms.window : null}
-                label={`${summary.location.name} hourly orders`}
-              />
-              <div className="stats">
-                <div>
-                  <span className="stat">{Math.round(summary.totals.scenarioOrders)}</span>
-                  <span className="muted small">orders expected</span>
-                </div>
-                <div>
-                  <span className={`stat ${summary.changeVsUsual > 0.05 ? "up" : summary.changeVsUsual < -0.05 ? "down" : ""}`}>{pct(summary.changeVsUsual)}</span>
-                  <span className="muted small">vs. a usual {weekday}</span>
-                </div>
+              <div className={`action ${selected.kind === "discount" ? "promo" : attention === "hold" ? "hold" : ""}`}>
+                <span className="muted small">{saved ? "Saved action" : "Suggested action"}</span>
+                <strong>{saved && selected.kind === "no-change" ? "Keep regular price" : actionLabel(selected, outlook.outlook)}</strong>
               </div>
-              <div className={`action ${selected.kind === "discount" ? "promo" : summary.classification === "constrained" ? "hold" : ""}`}>
-                <span className="muted small">Proposed action</span>
-                <strong>{actionLabel(selected, outlook.outlook)}</strong>
+              <div className="store-reason">
+                <h3>{saved ? "Your team’s decision" : "Why this helps"}</h3>
+                <p>{saved ? "These are the terms your team approved. Open the decision to review or change them." : storeSentence(outlook)}</p>
+                {savedPlan && savedPlan.scenario !== scenario && <p className="small muted">Saved for {scenarioLabel(savedPlan.scenario)}.</p>}
               </div>
-              <a className="button primary" href={hrefFor(`/location/${summary.location.id}`, { date, scenario })}>
-                Review {summary.location.name}
+              <details className="store-forecast">
+                <summary>See expected demand</summary>
+                <p className="small muted">Forecast for {scenarioLabel(scenario)}. Helps you spot busy and quiet hours. These are customer orders, not individual items sold.</p>
+                {scenario !== "typical" && <ul className="small muted">{outlook.contextSignals.filter((signal) => outlook.outlook.appliedSignalIds.includes(signal.id)).slice(0, 2).map((signal) => <li key={signal.id}>{signal.title}: {pct(signal.assumedOrderAdjustment)} assumed change in orders.</li>)}</ul>}
+                <MiniChart hours={outlook.outlook.hours} highlight={selected.kind === "discount" ? selected.terms.window : null} label={`${summary.location.name} hourly orders`} />
+                <p className="small"><strong>{Math.round(summary.totals.scenarioOrders)} orders expected</strong> · {pct(summary.changeVsUsual)} vs. a usual {weekday}.</p>
+                <p className="small muted">Based on {outlook.outlook.observationCount} past {weekday}s. {outlook.outlook.evidenceQuality !== "good" && "Limited history: treat this estimate with extra care."}</p>
+              </details>
+              <a className="button primary" href={hrefFor(`/location/${summary.location.id}`, { date, scenario: savedPlan?.scenario ?? scenario })}>
+                {saved ? "Review saved decision" : "Review suggestion"}<span aria-hidden> →</span><span className="sr-only"> for {summary.location.name}</span>
               </a>
-              <span className="muted small">
-                {units(outlook.outlook.observationCount)} past {weekday}s of history
-              </span>
             </article>
           );
         })}
       </div>
+      <p className="planning-footnote">You stay in control. Approving saves a plan for your team; it does not change menu prices or publish a post.</p>
     </section>
   );
 }

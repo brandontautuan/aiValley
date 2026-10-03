@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { LocationOutlookResponse, OfferTerms, Recommendation, ScenarioId } from "../../../contracts/index.ts";
+import type { LocationOutlookResponse, OfferCandidate, OfferTerms, Recommendation, ScenarioId } from "../../../contracts/index.ts";
 import { api, ApiRequestError } from "../api.ts";
 import { dateLabel, money, timestamp, windowLabel } from "../format.ts";
 import { isCapacityHold } from "../insights.ts";
@@ -19,11 +19,11 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
   const outlook = useLoad(() => api.outlook(locationId, date, scenario), [locationId, date, scenario]);
   const recommendation = useLoad(() => api.openRecommendation(locationId, date, scenario), [locationId, date, scenario]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [actionError, setActionError] = useState<ActionError>(null);
 
-  /** Runs a recommendation write; on a stale revision, reloads the latest state. */
   async function run(label: string, action: (rec: Recommendation) => Promise<Recommendation>) {
-    if (!recommendation.data) return;
+    if (!recommendation.data || recommendation.loading || busy) return;
     setBusy(label);
     setActionError(null);
     try {
@@ -43,129 +43,98 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
   const explain = () => run("explain", (rec) => api.explain(rec.id, rec.revision));
   const draft = () => run("draft", (rec) => api.socialDraft(rec.id, rec.revision));
 
-  if (outlook.error) return <p className="error">{outlook.error}</p>;
-  if (!outlook.data) return <p className="muted">Loading location outlook…</p>;
+  if (outlook.error) return <div className="error" role="alert"><p>We couldn’t load this store. {outlook.error}</p><button onClick={outlook.reload}>Try again</button></div>;
+  if (!outlook.data) return <p className="muted" role="status">Preparing your store’s suggestion…</p>;
   const { location, outlook: forecast } = outlook.data;
   const rec = recommendation.data;
   const selected = rec?.candidates.find((candidate) => candidate.id === rec.selectedCandidateId) ?? null;
   const weekday = dateLabel(forecast.date).split(",")[0];
-  const steps = [
-    { id: "why", label: "Why", done: true },
-    { id: "decide", label: "Decide", done: Boolean(selected?.valid) },
-    { id: "promote", label: "Promote", done: Boolean(rec?.socialDraft) },
-    { id: "approve", label: "Approve", done: rec?.status === "approved" },
-  ];
+  const pending = busy ?? (recommendation.loading ? "loading" : null);
 
   return (
-    <section className={`location ${outlook.loading ? "loading" : ""}`}>
+    <section className="location review-page">
       <div className="hero">
         <div>
           <a className="back" href={hrefFor("/", { date, scenario })}>← All stores</a>
-          <h1>
-            {location.name} · {dateLabel(forecast.date)}
-          </h1>
-          <p className="muted">
-            {location.profile} Open {location.openingHours.open}:00–{location.openingHours.close}:00 · capacity {location.hourlyCapacityOrders} orders/hr · based on{" "}
-            {forecast.observationCount} past {weekday}s ({forecast.evidenceQuality === "good" ? "good evidence" : "sparse evidence"})
-          </p>
+          <h1>{location.name}</h1>
+          <p className="muted lead">{dateLabel(forecast.date)} · Review the suggestion, then save your decision.</p>
         </div>
-        <nav className="steps" aria-label="Review steps">
-          {steps.map((step, index) => (
-            <a key={step.id} href={`#${step.id}`} onClick={(event) => { event.preventDefault(); document.getElementById(step.id)?.scrollIntoView({ behavior: "smooth" }); }} className={`step ${step.done ? "done" : ""}`}>
-              {step.done ? "✓" : index + 1} {step.label}
-            </a>
-          ))}
-        </nav>
+        {rec && <span className={`badge ${rec.status === "approved" ? "ok" : ""}`}>{rec.status === "approved" ? "Plan saved" : rec.status === "dismissed" ? "Suggestion dismissed" : "Ready for your review"}</span>}
       </div>
-
-      <div className="split" id="why">
-        <div className="panel chart-panel">
-          <div className="panel-head">
-            <h2>Why: hour by hour</h2>
-            <div className="legend">
-              <span><i className="sw baseline" />Usual {weekday}</span>
-              <span><i className="sw estimate" />Estimate</span>
-              <span><i className="sw win" />Offer window</span>
-              <span><i className="sw over" />At capacity</span>
-            </div>
-          </div>
-          <DemandChart response={outlook.data} window={selected?.terms.window ?? forecast.focusWindow} promo={selected?.kind === "discount"} />
-          <ul className="notes">
-            {forecast.notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        </div>
-        <RecommendationCard response={outlook.data} rec={rec} />
-      </div>
-
-      <EvidencePanel data={outlook.data} />
-      <CompetitorResearchPanel locationId={locationId} date={date} />
-
-      {recommendation.error && <p className="error">{recommendation.error}</p>}
+      {recommendation.error && <div className="error" role="alert"><p>We couldn’t load your decision. {recommendation.error}</p><button onClick={recommendation.reload}>Try again</button></div>}
+      {!rec && !recommendation.error && <p role="status">Loading the suggested plan…</p>}
       {rec && selected && (
         <>
-          <div className="section-head" id="decide">
-            <div>
-              <h2>Decide: options for {selected.itemName}, {windowLabel(selected.terms.window)}</h2>
-              <p className="muted">
-                Profit per item is before rent and staff. Extra sales are <abbr title="Low / base / high responses are explicit assumptions, not learned from traffic.">an assumption</abbr>, shown as a range.
-              </p>
-            </div>
-          </div>
-          <OptionCards recommendation={rec} disabled={busy !== null} onUse={edit} />
-          <details className="panel adjust">
-            <summary>Adjust item, time window or discount</summary>
-            <TermsEditor key={rec.revision} terms={selected.terms} menu={outlook.data.menu} location={location} disabled={busy !== null || rec.status === "dismissed"} onSubmit={edit} />
-          </details>
+          <RecommendationCard response={outlook.data} rec={rec} selected={selected} />
+          <div className="review-details">
+            <details className="panel disclosure">
+              <summary><strong>Understand the forecast</strong><span>See when this store is busy and what may affect demand.</span></summary>
+              <div className="disclosure-body">
+                <p className="muted">The chart compares usual customer orders with the estimate for this date. The capacity line shows how many orders the store can serve per hour.</p>
+                <div className="legend">
+                  <span><i className="sw baseline" />Usual {weekday}</span><span><i className="sw estimate" />Estimate</span>
+                  <span><i className="sw win" />Selected hours</span><span><i className="sw over" />At capacity</span>
+                </div>
+                <div className="chart-scroll"><DemandChart response={outlook.data} window={selected.terms.window} promo={selected.kind === "discount"} /></div>
+                <p className="small muted">{location.profile} Open {location.openingHours.open}:00–{location.openingHours.close}:00 · Can serve {location.hourlyCapacityOrders} orders per hour.</p>
+                <details><summary>How this estimate was made</summary><p className="small">Based on {forecast.observationCount} past {weekday}s.</p><ul className="notes">{forecast.notes.map((note) => <li key={note}>{note}</li>)}</ul></details>
+                <EvidencePanel data={outlook.data} />
+              </div>
+            </details>
 
-          <div className="section-head" id="promote">
-            <div>
-              <h2>Promote: the post, written from the exact terms</h2>
-              <p className="muted">Nothing is published from here. Copy goes stale as soon as the terms change.</p>
-            </div>
-          </div>
-          <PromotePanel
-            recommendation={rec}
-            location={location}
-            busy={busy}
-            onExplain={explain}
-            onDraft={draft}
-            contextSignals={outlook.data.contextSignals}
-            appliedSignalIds={forecast.appliedSignalIds}
-          />
+            <details className="panel disclosure">
+              <summary><strong>Compare prices or adjust this plan</strong><span>Optional · Choose another price, item, or time.</span></summary>
+              <div className="disclosure-body">
+                <p className="muted">Select a price option to update your plan. Extra sales are assumptions, not guaranteed results. Saving an edited plan replaces the earlier saved decision.</p>
+                <OptionCards recommendation={rec} disabled={pending !== null || dirty} onUse={edit} />
+                <details className="adjust">
+                  <summary>Change item, hours, or discount</summary>
+                  <p className="small muted disclosure-intro">After changing the terms, select “Update plan & check numbers” before approving.</p>
+                  <TermsEditor key={rec.revision} terms={selected.terms} menu={outlook.data.menu} location={location} disabled={pending !== null || rec.status === "dismissed"} onSubmit={edit} onDirty={setDirty} />
+                </details>
+              </div>
+            </details>
 
-          <div id="approve" />
-          <DecisionBar recommendation={rec} selected={selected} location={location} busy={busy} error={actionError} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />
+            <details className="panel disclosure" id="promote">
+              <summary><strong>Prepare a social post</strong><span>Optional · Create a caption to copy and post yourself.</span></summary>
+              <div className="disclosure-body">
+                <p className="muted">A post is optional. Create it before approving if you want the caption included in the saved plan. Captions created after approval can be copied here, but are not added to the already saved plan.</p>
+                <PromotePanel recommendation={rec} location={location} busy={dirty ? "unsaved" : pending} onExplain={explain} onDraft={draft} contextSignals={outlook.data.contextSignals} appliedSignalIds={forecast.appliedSignalIds} />
+              </div>
+            </details>
+
+            <details className="panel disclosure">
+              <summary><strong>Research nearby competitors</strong><span>Optional · Look up public sources for your own review.</span></summary>
+              <div className="disclosure-body"><CompetitorResearchPanel locationId={locationId} date={date} /></div>
+            </details>
+          </div>
+          <DecisionBar recommendation={rec} selected={selected} location={location} busy={pending} error={actionError} dirty={dirty} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />
         </>
       )}
     </section>
   );
 }
 
-function RecommendationCard({ response, rec }: { response: LocationOutlookResponse; rec: Recommendation | null }) {
-  const selected = rec?.candidates.find((candidate) => candidate.id === rec.selectedCandidateId);
-  const hold = selected ? isCapacityHold(selected) : response.outlook.focusReason === "capacity-peak";
-  const competitor = response.competitorOffers.find((offer) => offer.comparability === "comparable") ?? response.competitorOffers[0];
-  const headline = !selected
-    ? "Loading…"
-    : selected.kind === "discount"
-      ? `Trial ${selected.terms.discountPct}% off ${selected.itemName}, ${windowLabel(selected.terms.window)}.`
-      : hold
-        ? "Hold the price. No promotion."
-        : "Keep the regular price.";
+function RecommendationCard({ response, rec, selected }: { response: LocationOutlookResponse; rec: Recommendation; selected: OfferCandidate }) {
+  const hold = isCapacityHold(selected);
   return (
-    <aside className={`panel rec-card ${hold ? "dark" : ""}`}>
-      <span className="eyebrow">Recommendation</span>
-      <h2 className="rec-headline">{headline}</h2>
-      <p>{rec?.deterministicReason ?? response.selection.reason}</p>
-      {competitor && (
-        <div className="rec-note">
-          <strong>Nearby:</strong> {competitor.competitorName}, {competitor.itemDescription}
-          {competitor.priceCents !== null && ` at ${money(competitor.priceCents)}`}. <span className="muted">{competitor.comparabilityNotes}</span>
-        </div>
-      )}
-    </aside>
+    <section className="panel recommendation-summary">
+      <span className="eyebrow">{rec.status === "approved" ? "Your saved decision" : "Your selected plan"}</span>
+      <h2 className="rec-headline">{selected.kind === "discount" ? `Try ${selected.terms.discountPct}% off ${selected.itemName}` : "Keep the regular price"}</h2>
+      <p className="muted">{selected.itemName} · {windowLabel(selected.terms.window)} · {response.location.name} only</p>
+      <div className="reason-block">
+        <h3>{rec.deterministicReason.startsWith("Manager-edited terms:") ? "About your choice" : "Why this makes sense"}</h3>
+        <p>{rec.deterministicReason.startsWith("Manager-edited terms:") ? "You chose these terms. Review the updated numbers below before saving your decision." : rec.deterministicReason.replace("no discount clears its break-even threshold under the assumed response.", "the assumed extra sales from a discount would not make up for the lower price.")}</p>
+      </div>
+      <div className="decision-facts">
+        <div><span className="small muted">Customer pays</span><strong>{money(selected.proposedPriceCents)}</strong><span className="small muted">per item{selected.kind === "discount" ? `, usually ${money(selected.regularPriceCents)}` : " at the regular price"}</span></div>
+        <div><span className="small muted">Left after item costs</span><strong>{money(selected.contributionPerUnitCents)}</strong><span className="small muted">per item, before rent, staff, and other fixed costs</span></div>
+        {selected.kind === "discount" && <div><span className="small muted">Sales needed to match regular pricing</span><strong>{selected.breakEvenUnits === null ? "Unavailable" : `${selected.breakEvenUnits} items`}</strong><span className="small muted">during these hours, to match the usual amount left after item costs</span></div>}
+      </div>
+      <p className="expectation-note">{selected.kind === "discount" ? "Treat this as a trial. If the discount does not bring enough extra sales, you could earn less than at regular prices." : hold ? "The store is expected to be busy. Keeping prices steady avoids encouraging orders beyond what the team can serve." : "Keeping prices steady is a complete plan. You do not need to run a promotion."}</p>
+      {response.outlook.evidenceQuality !== "good" && <p className="warn-text small">Limited sales history: review this estimate with extra care.</p>}
+      {selected.issues.length > 0 && <ul className="review-warnings">{selected.issues.map((issue) => <li key={issue.code} className={issue.severity === "error" ? "error-text" : "warn-text"}>{issue.severity === "error" ? "Needs fixing: " : "Keep in mind: "}{issue.message}</li>)}</ul>}
+    </section>
   );
 }
 
@@ -174,9 +143,9 @@ function EvidencePanel({ data }: { data: LocationOutlookResponse }) {
   return (
     <details className="panel evidence-panel">
       <summary>
-        Evidence: {data.contextSignals.length} context record{data.contextSignals.length === 1 ? "" : "s"}, {data.competitorOffers.length} competitor offer
-        {data.competitorOffers.length === 1 ? "" : "s"} <span className="muted small">· {data.fixtureLabel}</span>
+        Local events and nearby offers
       </summary>
+      <p className="muted small disclosure-intro">These sample records explain the local context behind the forecast. Only records marked “applied” affect expected demand.</p>
       <div className="evidence-grid">
         <ul className="evidence">
           {data.contextSignals.map((signal) => (

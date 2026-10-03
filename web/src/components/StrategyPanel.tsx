@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { RankedAction, ScenarioId, StrategyRun, TrendEvidence } from "../../../contracts/index.ts";
 import { api, ApiRequestError } from "../api.ts";
-import { dateLabel, timestamp } from "../format.ts";
+import { dateLabel, scenarioLabel, timestamp } from "../format.ts";
 import { useLoad } from "../useLoad.ts";
 
 const STATUS_LABEL: Record<StrategyRun["status"], string> = {
@@ -112,7 +112,7 @@ export function Strategy({ date, scenario }: { date: string; scenario: ScenarioI
       <div className="panel">
         <div className="panel-head">
           <h2>Build a strategy run</h2>
-          <span className="muted small">{dateLabel(date)} · {scenario === "local-event" ? "Local event day" : "Typical day"}</span>
+          <span className="muted small">{dateLabel(date)} · {scenarioLabel(scenario)}</span>
         </div>
         {overview.error && <p className="error">{overview.error}</p>}
         <form

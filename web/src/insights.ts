@@ -39,6 +39,8 @@ export function storeSentence(response: LocationOutlookResponse): string {
     return `Quiet ${window}, about ${Math.round(share * 100)}% of a typical hour. Trial ${selected.terms.discountPct}% off ${selected.itemName} to fill it.`;
   }
   if (outlook.focusReason === "capacity-peak") return `Demand reaches capacity ${window}. Hold the price; a promotion would add orders you can't serve.`;
+  if (outlook.evidenceQuality !== "good") return "There is not enough sales history to confidently suggest a discount. Keep prices steady while you learn more.";
+  if (outlook.focusReason === "soft-window") return `There is a quiet period ${window}, but the assumed extra sales do not justify a discount. Keep regular prices.`;
   return "Demand is in the usual range with no unusually quiet window. Keep the regular price.";
 }
 

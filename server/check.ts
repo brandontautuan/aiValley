@@ -206,8 +206,28 @@ try {
       }),
     },
   );
-  assert.deepEqual(Object.keys(zooWorkRequest as Record<string, unknown>).sort(), ["deterministicRecommendation", "evidence", "horizon", "location"]);
+  assert.deepEqual(Object.keys(zooWorkRequest as Record<string, unknown>).sort(), ["deterministicRecommendation", "evidence", "horizon", "instructions", "location"]);
   assert.equal(await createZooWorkStrategyWorkflowFromEnv({}), undefined, "missing server-only ZooWork credentials leaves fallback active");
+
+  // Mock scenarios run through the unchanged engine and produce varied decisions across seeds.
+  await withServer(async (call) => {
+    const kinds = new Set<string>();
+    const classifications = new Set<string>();
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const overview = (await call<OverviewResponse>("GET", `/api/overview?date=${date}&scenario=mock-${seed}`)).json;
+      assert.equal(overview.locations.length, 3);
+      assert.ok(overview.fixtureLabel.includes(`Mock dataset #${seed}`));
+      for (const entry of overview.locations) {
+        kinds.add(entry.selectedKind);
+        classifications.add(entry.classification);
+      }
+    }
+    assert.ok(kinds.has("discount") && kinds.has("no-change"), "mock seeds yield both discounts and keep-price decisions");
+    assert.ok(classifications.has("constrained") && classifications.size >= 3, "mock seeds yield varied demand classifications");
+    const mockRec = (await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "mock-12", locationId: "arena" })).json;
+    assert.equal(mockRec.scenario, "mock-12");
+    assert.equal((await call("GET", `/api/overview?date=${date}&scenario=mock-x`)).status, 400);
+  });
 
   // A separate ZooWork content agent returns structured copy, while the planner
   // still owns validation and only passes it a bounded planning packet.
@@ -246,6 +266,33 @@ try {
   assert.equal(zooContentRequest?.task, "social_draft");
   assert.deepEqual(Object.keys(zooContentRequest?.packet as Record<string, unknown>).sort(), ["assumptions", "brandTone", "competitorOffers", "contextSignals", "deterministicReason", "location", "outlook", "recommendationId", "revision", "selected"]);
   assert.equal(await createZooWorkContentModelFromEnv({}), undefined, "missing content-agent credentials leave templates active");
+
+  // Copy that names a weekday other than the offer date's is rejected, so the template is used.
+  await withServer(
+    async (call) => {
+      const rec = (await call<Recommendation>("POST", "/api/recommendations", { date, scenario: "typical", locationId: "downtown" })).json;
+      const drafted = (await call<Recommendation>("POST", `/api/recommendations/${rec.id}/social-draft`, { expectedRevision: rec.revision })).json;
+      assert.equal(drafted.socialDraft?.source, "template");
+    },
+    {
+      model: createZooWorkContentModel({
+        agentId: "agt-content",
+        client: {
+          async createSession() {
+            return { session_id: "zoo-content-session" };
+          },
+          async *streamEvents() {
+            yield {
+              eventType: "agent.assistant",
+              runId: "zoo-content-run",
+              payload: { message: { content: [{ type: "text", text: JSON.stringify({ caption: "Coffee & Pastry Pair at Harborline Coffee Downtown this Sunday.", creativeBrief: "Warm café photo of the Coffee & Pastry Pair." }) }] } },
+            };
+            yield { eventType: "run.finished", runId: "zoo-content-run", payload: { status: "succeeded" } };
+          },
+        },
+      }),
+    },
+  );
 
   // The route returns Tavily sources only as manager-review evidence.
   await withServer(

@@ -9,7 +9,7 @@ export const brand = {
   /** Label for an item unit in offer economics (e.g. "break-even units"). */
   itemNoun: { singular: "unit", plural: "units" },
   fixtureNotice:
-    "Demo data: a fictional coffee-shop chain with fixture sales, events and competitors. Forecasts and demand responses are estimates, not measured results.",
+    "Demo · Fictional stores and sample data. Sales forecasts are estimates, not guaranteed results.",
 } as const;
 
 export const documentTitle = `${brand.name} ${brand.product}`;
