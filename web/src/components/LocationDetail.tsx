@@ -58,6 +58,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
           <a className="back" href={hrefFor("/", { date, scenario })}>← All stores</a>
           <h1>{location.name}</h1>
           <p className="muted lead">{dateLabel(forecast.date)} · Review the suggestion, then save your decision.</p>
+          <a className="market-jump" href="#market-context">View nearby competitors and research ↓</a>
         </div>
         {rec && <span className={`badge ${rec.status === "approved" ? "ok" : ""}`}>{rec.status === "approved" ? "Plan saved" : rec.status === "dismissed" ? "Suggestion dismissed" : "Ready for your review"}</span>}
       </div>
@@ -66,6 +67,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
       {rec && selected && (
         <>
           <RecommendationCard response={outlook.data} rec={rec} selected={selected} />
+          <MarketContext data={outlook.data} date={date} />
           <div className="review-details">
             <details className="panel disclosure">
               <summary><strong>Understand the forecast</strong><span>See when this store is busy and what may affect demand.</span></summary>
@@ -78,7 +80,6 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
                 <div className="chart-scroll"><DemandChart response={outlook.data} window={selected.terms.window} promo={selected.kind === "discount"} /></div>
                 <p className="small muted">{location.profile} Open {location.openingHours.open}:00–{location.openingHours.close}:00 · Can serve {location.hourlyCapacityOrders} orders per hour.</p>
                 <details><summary>How this estimate was made</summary><p className="small">Based on {forecast.observationCount} past {weekday}s.</p><ul className="notes">{forecast.notes.map((note) => <li key={note}>{note}</li>)}</ul></details>
-                <EvidencePanel data={outlook.data} />
               </div>
             </details>
 
@@ -103,14 +104,40 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
               </div>
             </details>
 
-            <details className="panel disclosure">
-              <summary><strong>Research nearby competitors</strong><span>Optional · Look up public sources for your own review.</span></summary>
-              <div className="disclosure-body"><CompetitorResearchPanel locationId={locationId} date={date} /></div>
-            </details>
           </div>
           <DecisionBar recommendation={rec} selected={selected} location={location} busy={pending} error={actionError} dirty={dirty} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />
         </>
       )}
+    </section>
+  );
+}
+
+function MarketContext({ data, date }: { data: LocationOutlookResponse; date: string }) {
+  const offer = data.competitorOffers.find((entry) => entry.comparability === "comparable") ?? data.competitorOffers[0];
+  const label = offer?.comparability === "comparable" ? "Comparable sample offer" : offer?.comparability === "noncomparable" ? "Nearby offer · different format" : "Nearby offer · needs review";
+
+  return (
+    <section className="panel market-brief" id="market-context" aria-labelledby="market-heading">
+      <div className="market-summary">
+        <div>
+          <h2 id="market-heading">Nearby competitors</h2>
+          <p className="muted small">A quick check of what else is offered near this store.</p>
+        </div>
+        <span className="tag info">Sample context</span>
+      </div>
+      {offer ? (
+        <div className="market-offer">
+          <div>
+            <span className="small muted">{label}</span>
+            <strong>{offer.competitorName}: {offer.itemDescription}</strong>
+            <span className="small muted">{offer.terms ?? offer.availability ?? offer.comparabilityNotes}</span>
+          </div>
+          {offer.priceCents !== null && <strong className="market-price">{money(offer.priceCents)}</strong>}
+        </div>
+      ) : <p className="muted small">No nearby sample offer is recorded for this store.</p>}
+      <p className="small muted market-limitation">Demo records are for comparison; public-web results require manager review before use.</p>
+      <CompetitorResearchPanel locationId={data.location.id} date={date} compact />
+      <EvidencePanel data={data} />
     </section>
   );
 }
@@ -143,7 +170,7 @@ function EvidencePanel({ data }: { data: LocationOutlookResponse }) {
   return (
     <details className="panel evidence-panel">
       <summary>
-        Local events and nearby offers
+        See all local signals and sample offers
       </summary>
       <p className="muted small disclosure-intro">These sample records explain the local context behind the forecast. Only records marked “applied” affect expected demand.</p>
       <div className="evidence-grid">

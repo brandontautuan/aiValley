@@ -1,5 +1,11 @@
 # Role A handoff — simplified planning UI
 
+## Disney Cafe update
+- Displayed UI name and document title are Disney Cafe Daily Planner. The logo uses a small abstract star rather than a character or official mark.
+- DM Sans body text and Alegreya headings, warm neutral surfaces, copper actions, blue information, and gold save emphasis form the updated visual language. Navigation tabs, buttons, and disclosures now have distinct states and brief motion with reduced-motion support.
+- Each store review now shows nearby competitor context immediately after the recommendation, with a visible public-source research action and deeper sample evidence. A jump link in the store header makes it easy to find.
+- `web/design/disney-cafe-reference.png` is the toned-down comp used as a composition reference; current typography and color reflect the user's later feedback.
+
 ## Ready interfaces and paths
 - `web/src/App.tsx`: Daily planning and Saved plans are primary navigation. Week, Month, and Strategy remain under More views. One planning-date control; scenario and reset controls are under Demo settings. Date/scenario/location changes remount review state to prevent mixing contexts.
 - The date control begins after the first fixed-fixture observation (2026-08-11);

@@ -72,7 +72,7 @@ function CompetitorProfile({ result }: { result: CompetitorResearchResult }) {
  * controls: public-web results remain manager-review evidence until a future
  * audited promotion flow exists.
  */
-export function CompetitorResearchPanel({ locationId, date }: { locationId: string; date: string }) {
+export function CompetitorResearchPanel({ locationId, date, compact = false }: { locationId: string; date: string; compact?: boolean }) {
   const [data, setData] = useState<CompetitorResearchResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,20 +94,19 @@ export function CompetitorResearchPanel({ locationId, date }: { locationId: stri
   const unavailable = data?.results.every((result) => result.run.status === "unavailable");
 
   return (
-    <section className="panel research-panel" aria-labelledby="public-web-research">
+    <section className={`panel research-panel ${compact ? "compact" : ""}`} aria-labelledby="public-web-research">
       <div className="panel-head">
         <div>
-          <span className="eyebrow">Optional context</span>
-          <h2 id="public-web-research">Public-web competitor research</h2>
+          <h2 id="public-web-research">Check public sources</h2>
         </div>
         <button className="ghost" onClick={refresh} disabled={busy}>
           {busy ? "Researching…" : data ? "Refresh research" : "Research competitors"}
         </button>
       </div>
       <p className="muted">
-        Searches configured nearby competitors for this planning date. Sources are unverified context — they do not change pricing, recommendations, or social copy.
+        Search configured nearby competitors for this date. Results provide context for your review.
       </p>
-      <p className="research-notice"><strong>Manager review required.</strong> Confirm a source, its local applicability, price and terms before treating it as a comparable offer.</p>
+      {data && <p className="research-notice"><strong>Manager review required.</strong> Confirm a source, its local applicability, price and terms before treating it as a comparable offer. Research does not change this plan automatically.</p>}
       {error && <p className="error">{error}</p>}
       {unavailable && <p className="muted small">Tavily is not configured or is temporarily unavailable. Fixture-based planning continues normally.</p>}
       {data && !unavailable && (

@@ -1,4 +1,4 @@
-/** Brand logo mark: a crisp, scalable SVG echoing the half-filled ◐ motif.
+/** Quiet, scalable star mark for the fictional cafe demo.
  *  Sizes to the container's font-size (1em) and inherits color via currentColor. */
 export function BrandMark({ className, title }: { className?: string; title?: string }) {
   return (
@@ -12,8 +12,7 @@ export function BrandMark({ className, title }: { className?: string; title?: st
       focusable="false"
     >
       {title && <title>{title}</title>}
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 2 A10 10 0 0 0 12 22 Z" fill="currentColor" />
+      <path d="M12 2.5 13.8 10.2 21.5 12l-7.7 1.8L12 21.5l-1.8-7.7L2.5 12l7.7-1.8L12 2.5Z" fill="currentColor" />
     </svg>
   );
 }

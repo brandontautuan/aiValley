@@ -1,6 +1,7 @@
 import type { Location, OfferCandidate, Recommendation } from "../../../contracts/index.ts";
 import { money, windowLabel } from "../format.ts";
 import type { ActionError } from "./LocationDetail.tsx";
+import { UiIcon } from "./UiIcon.tsx";
 
 export function DecisionBar({ recommendation, selected, location, busy, error, dirty, onDecide, planHref }: {
   recommendation: Recommendation; selected: OfferCandidate; location: Location; busy: string | null;
@@ -20,7 +21,7 @@ export function DecisionBar({ recommendation, selected, location, busy, error, d
         {!error && blocking.length > 0 && <span className="bar-error">Fix these before approving: {blocking.map((issue) => issue.message).join(" ")}</span>}
       </div>
       {saved ? (
-        <><span className="saved" role="status">✓ Plan saved</span><a className="bar-link" href={planHref}>View saved plans →</a></>
+        <><span className="saved" role="status"><UiIcon name="check" /> Plan saved</span><a className="bar-link" href={planHref}>View saved plans <UiIcon name="arrowRight" size={16} /></a></>
       ) : (
         <div className="decision-actions">
           {!dismissed && <button className="bar-ghost" disabled={busy !== null || dirty} onClick={() => onDecide("dismiss")}>Dismiss suggestion</button>}

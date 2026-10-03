@@ -7,6 +7,7 @@ import { LocationDetail } from "./components/LocationDetail.tsx";
 import { Month } from "./components/Month.tsx";
 import { ScenarioToggle } from "./components/ScenarioToggle.tsx";
 import { BrandMark } from "./components/BrandMark.tsx";
+import { UiIcon } from "./components/UiIcon.tsx";
 import { Strategy } from "./components/StrategyPanel.tsx";
 import { Today } from "./components/Today.tsx";
 import { Week } from "./components/Week.tsx";
@@ -18,9 +19,9 @@ const DEFAULT_DATE = "2026-10-05";
 // The API still rejects unsupported dates from manually edited links or direct requests.
 const EARLIEST_DEMO_DATE = "2026-08-11";
 
-const TABS: Array<{ path: string; label: string; active: (route: Route) => boolean }> = [
-  { path: "/", label: "Daily planning", active: (route) => route.page === "today" || route.page === "location" },
-  { path: "/plan", label: "Saved plans", active: (route) => route.page === "plan" },
+const TABS: Array<{ path: string; label: string; icon?: "calendar" | "bookmark"; active: (route: Route) => boolean }> = [
+  { path: "/", label: "Daily planning", icon: "calendar", active: (route) => route.page === "today" || route.page === "location" },
+  { path: "/plan", label: "Saved plans", icon: "bookmark", active: (route) => route.page === "plan" },
   { path: "/week", label: "Week", active: (route) => route.page === "week" },
   { path: "/month", label: "Month", active: (route) => route.page === "month" },
   { path: "/strategy", label: "Strategy", active: (route) => route.page === "strategy" },
@@ -85,14 +86,15 @@ export function App() {
             <span className="muted"> {brand.product}</span>
           </span>
         </a>
-        <nav className="tabs" aria-label="Views">
+        <nav className="tabs" aria-label="Main views">
           {TABS.slice(0, 2).map((tab) => (
             <a key={tab.path} href={hrefFor(tab.path, params)} className={tab.active(route) ? "active" : ""} aria-current={tab.active(route) ? "page" : undefined}>
+              {tab.icon && <UiIcon name={tab.icon} />}
               {tab.label}
             </a>
           ))}
           <details className="nav-more" key={route.page}>
-            <summary>{TABS.slice(2).find((tab) => tab.active(route))?.label ?? "More views"}</summary>
+            <summary><UiIcon name="grid" />{TABS.slice(2).find((tab) => tab.active(route))?.label ?? "More views"}<UiIcon className="menu-chevron" name="chevronDown" size={16} /></summary>
             <div className="nav-menu">
               {TABS.slice(2).map((tab) => (
                 <a key={tab.path} href={hrefFor(tab.path, params)} aria-current={tab.active(route) ? "page" : undefined}>
@@ -112,7 +114,7 @@ export function App() {
       <div className="demo-strip">
         <span>{mockSeedOf(scenario) !== null ? `Mock data #${mockSeedOf(scenario)} · Random fictional sales, costs, and local signals; competitor offers are sample records. Forecasts are estimates.` : brand.fixtureNotice}</span>
         <details className="demo-settings">
-          <summary>{scenarioLabel(scenario)} · Demo settings</summary>
+          <summary><UiIcon name="sliders" size={16} />{scenarioLabel(scenario)} · Demo settings<UiIcon className="menu-chevron" name="chevronDown" size={16} /></summary>
           <div className="panel demo-options">
             <p>Try a different day to see how local events affect the suggestions.</p>
             <ScenarioToggle value={scenario} onChange={setScenario} compact />

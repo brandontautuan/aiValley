@@ -2,6 +2,7 @@ import type { OfferCandidate, OfferTerms, Recommendation } from "../../../contra
 import { brand } from "../brand.ts";
 import { money, units } from "../format.ts";
 import { isCapacityHold } from "../insights.ts";
+import { UiIcon } from "./UiIcon.tsx";
 
 /** Candidate economics as comparable cards. Every number is the server's. */
 export function OptionCards({ recommendation, disabled, onUse }: { recommendation: Recommendation; disabled: boolean; onUse: (terms: OfferTerms) => void }) {
@@ -57,12 +58,12 @@ export function OptionCards({ recommendation, disabled, onUse }: { recommendatio
             <p className="verdict">{verdict(candidate, base?.units ?? null, base?.contributionCents ?? null)}</p>
 
             {errors.map((issue) => (
-              <span key={issue.code} className="issue error-text">✕ {issue.message}</span>
+              <span key={issue.code} className="issue error-text"><UiIcon name="close" size={16} /> {issue.message}</span>
             ))}
             {warnings.map((issue) => (
-              <span key={issue.code} className="issue warn-text">⚠ {issue.message}</span>
+              <span key={issue.code} className="issue warn-text"><UiIcon name="warning" size={16} /> {issue.message}</span>
             ))}
-            {!selected && editable && !errors.length && <span className="use">Use this option →</span>}
+            {!selected && editable && !errors.length && <span className="use">Use this option <UiIcon name="arrowRight" size={16} /></span>}
           </button>
         );
       })}

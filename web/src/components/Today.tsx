@@ -5,6 +5,7 @@ import { actionLabel, selectedCandidate, storeSentence } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
 import { MiniChart } from "./MiniChart.tsx";
+import { UiIcon } from "./UiIcon.tsx";
 
 interface TodayData {
   overview: OverviewResponse;
@@ -24,9 +25,8 @@ export function Today({ date, scenario }: { date: string; scenario: ScenarioId }
   const head = (
     <div className="hero daily-hero">
       <div>
-        <span className="eyebrow">{dateLabel(date)}</span>
         <h1>A clear plan for each store.</h1>
-        <p className="muted lead">Choose a store, review its suggestion, then approve your plan.</p>
+        <p className="muted lead">{dateLabel(date)} · Choose a store, review its suggestion, then approve your plan.</p>
       </div>
     </div>
   );
@@ -73,7 +73,7 @@ export function Today({ date, scenario }: { date: string; scenario: ScenarioId }
                 <p className="small muted">Based on {outlook.outlook.observationCount} past {weekday}s. {outlook.outlook.evidenceQuality !== "good" && "Limited history: treat this estimate with extra care."}</p>
               </details>
               <a className="button primary" href={hrefFor(`/location/${summary.location.id}`, { date, scenario: savedPlan?.scenario ?? scenario })}>
-                {saved ? "Review saved decision" : "Review suggestion"}<span aria-hidden> →</span><span className="sr-only"> for {summary.location.name}</span>
+                {saved ? "Review saved decision" : "Review suggestion"}<UiIcon name="arrowRight" /><span className="sr-only"> for {summary.location.name}</span>
               </a>
             </article>
           );
