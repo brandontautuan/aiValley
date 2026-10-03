@@ -19,12 +19,12 @@ const DEFAULT_DATE = "2026-10-05";
 // The API still rejects unsupported dates from manually edited links or direct requests.
 const EARLIEST_DEMO_DATE = "2026-08-11";
 
-const TABS: Array<{ path: string; label: string; icon?: "calendar" | "bookmark"; active: (route: Route) => boolean }> = [
+const TABS: Array<{ path: string; label: string; icon: "calendar" | "bookmark" | "grid" | "chart" | "compass"; active: (route: Route) => boolean }> = [
   { path: "/", label: "Daily planning", icon: "calendar", active: (route) => route.page === "today" || route.page === "location" },
   { path: "/plan", label: "Saved plans", icon: "bookmark", active: (route) => route.page === "plan" },
-  { path: "/week", label: "Week", active: (route) => route.page === "week" },
-  { path: "/month", label: "Month", active: (route) => route.page === "month" },
-  { path: "/strategy", label: "Strategy", active: (route) => route.page === "strategy" },
+  { path: "/week", label: "Week outlook", icon: "chart", active: (route) => route.page === "week" },
+  { path: "/month", label: "Month calendar", icon: "grid", active: (route) => route.page === "month" },
+  { path: "/strategy", label: "Strategy", icon: "compass", active: (route) => route.page === "strategy" },
 ];
 
 export function App() {
@@ -87,22 +87,12 @@ export function App() {
           </span>
         </a>
         <nav className="tabs" aria-label="Main views">
-          {TABS.slice(0, 2).map((tab) => (
+          {TABS.map((tab) => (
             <a key={tab.path} href={hrefFor(tab.path, params)} className={tab.active(route) ? "active" : ""} aria-current={tab.active(route) ? "page" : undefined}>
-              {tab.icon && <UiIcon name={tab.icon} />}
+              <UiIcon name={tab.icon} />
               {tab.label}
             </a>
           ))}
-          <details className="nav-more" key={route.page}>
-            <summary><UiIcon name="grid" />{TABS.slice(2).find((tab) => tab.active(route))?.label ?? "More views"}<UiIcon className="menu-chevron" name="chevronDown" size={16} /></summary>
-            <div className="nav-menu">
-              {TABS.slice(2).map((tab) => (
-                <a key={tab.path} href={hrefFor(tab.path, params)} aria-current={tab.active(route) ? "page" : undefined}>
-                  {tab.label === "Week" ? "Weekly outlook" : tab.label === "Month" ? "Monthly calendar" : "Multi-day strategy"}
-                </a>
-              ))}
-            </div>
-          </details>
         </nav>
         <div className="controls">
           <label className="date-control">

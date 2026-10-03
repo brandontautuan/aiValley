@@ -12,6 +12,7 @@ import { OptionCards } from "./OptionCards.tsx";
 import { PromotePanel } from "./PromotePanel.tsx";
 import { SignalIcon } from "./SignalIcon.tsx";
 import { TermsEditor } from "./TermsEditor.tsx";
+import { UiIcon } from "./UiIcon.tsx";
 
 export type ActionError = { message: string; issues?: string[] } | null;
 
@@ -58,7 +59,10 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
           <a className="back" href={hrefFor("/", { date, scenario })}>← All stores</a>
           <h1>{location.name}</h1>
           <p className="muted lead">{dateLabel(forecast.date)} · Review the suggestion, then save your decision.</p>
-          <a className="market-jump" href="#market-context">View nearby competitors and research ↓</a>
+          <div className="feature-links">
+            <button type="button" className="feature-jump" onClick={() => document.getElementById("market-context")?.scrollIntoView({ block: "start" })}>Nearby competitors and research <UiIcon name="arrowDown" size={16} /></button>
+            <button type="button" className="feature-jump" onClick={() => document.getElementById("social-workspace")?.scrollIntoView({ block: "start" })}>Social media plan and copy <UiIcon name="arrowDown" size={16} /></button>
+          </div>
         </div>
         {rec && <span className={`badge ${rec.status === "approved" ? "ok" : ""}`}>{rec.status === "approved" ? "Plan saved" : rec.status === "dismissed" ? "Suggestion dismissed" : "Ready for your review"}</span>}
       </div>
@@ -96,15 +100,17 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
               </div>
             </details>
 
-            <details className="panel disclosure" id="promote">
-              <summary><strong>Prepare a social post</strong><span>Optional · Create a caption to copy and post yourself.</span></summary>
-              <div className="disclosure-body">
-                <p className="muted">A post is optional. Create it before approving if you want the caption included in the saved plan. Captions created after approval can be copied here, but are not added to the already saved plan.</p>
-                <PromotePanel recommendation={rec} location={location} busy={dirty ? "unsaved" : pending} onExplain={explain} onDraft={draft} contextSignals={outlook.data.contextSignals} appliedSignalIds={forecast.appliedSignalIds} />
-              </div>
-            </details>
-
           </div>
+          <section className="social-workspace" id="social-workspace" aria-labelledby="social-heading">
+            <div className="section-head">
+              <div>
+                <h2 id="social-heading">Social media plan and copy</h2>
+                <p className="muted">Suggested timing and content are ready to review. Create a caption before approving if you want it saved with the plan.</p>
+              </div>
+              <span className="tag">Optional · posted by your team</span>
+            </div>
+            <PromotePanel recommendation={rec} location={location} busy={dirty ? "unsaved" : pending} onExplain={explain} onDraft={draft} contextSignals={outlook.data.contextSignals} appliedSignalIds={forecast.appliedSignalIds} />
+          </section>
           <DecisionBar recommendation={rec} selected={selected} location={location} busy={pending} error={actionError} dirty={dirty} onDecide={decide} planHref={hrefFor("/plan", { date, scenario })} />
         </>
       )}
