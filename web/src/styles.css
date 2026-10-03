@@ -112,7 +112,7 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .strike { text-decoration: line-through; }
-.eyebrow { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.eyebrow { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
 .lead { font-size: 1.05rem; }
 .error { background: var(--danger-soft); color: var(--danger-text); padding: 10px 12px; border-radius: 10px; }
 .error ul { margin: 6px 0 0; padding-left: 18px; }
@@ -374,7 +374,7 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .big-line { font-size: 1.2rem; font-weight: 600; margin: 0 0 4px; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .hero .actions { margin-top: 0; }
-.caption { margin: 8px 0; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 8px 8px 0; }
+.caption { margin: 8px 0; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
 
 .decision-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 24px -16px 0; padding: 14px 16px; background: var(--ink); color: var(--on-ink); border-radius: 14px 14px 0 0; }
 .decision-terms { flex: 1 1 280px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }

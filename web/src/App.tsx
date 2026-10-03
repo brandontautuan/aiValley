@@ -6,6 +6,7 @@ import { ActionPlan } from "./components/ActionPlan.tsx";
 import { LocationDetail } from "./components/LocationDetail.tsx";
 import { Month } from "./components/Month.tsx";
 import { ScenarioToggle } from "./components/ScenarioToggle.tsx";
+import { BrandMark } from "./components/BrandMark.tsx";
 import { Strategy } from "./components/StrategyPanel.tsx";
 import { Today } from "./components/Today.tsx";
 import { Week } from "./components/Week.tsx";
@@ -63,7 +64,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <a className="brand" href={hrefFor("/", params)}>
-          <span className="logo" aria-hidden>{brand.logoGlyph}</span>
+          <BrandMark className="logo" title={brand.name} />
           <span>
             <strong>{brand.name}</strong>
             <span className="muted"> {brand.product}</span>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Explanation, Location, Recommendation, SocialDraft } from "../../../contracts/index.ts";
 import { brand } from "../brand.ts";
 import { localTime, money, timestamp, windowLabel } from "../format.ts";
+import { BrandMark } from "./BrandMark.tsx";
 
 const isDraft = (content: Explanation | SocialDraft): content is SocialDraft => "caption" in content;
 
@@ -65,7 +66,7 @@ export function PromotePanel({
             <span className="muted small">{shown ? localTime(shown.postAt, location.timezone) : ""}</span>
           </div>
           <div className="post-img">
-            <span className="post-glyph" aria-hidden>{brand.logoGlyph}</span>
+            <BrandMark className="post-glyph" />
             <span className="small">[Photo: {selected.itemName}, natural light]</span>
             {shown && shown.terms.priceCents !== shown.terms.regularPriceCents && (
               <span className="post-overlay">
