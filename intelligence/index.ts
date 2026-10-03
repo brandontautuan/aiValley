@@ -50,19 +50,49 @@ function allowedEvidenceIds(packet: ContentPacket): Set<string> {
   return new Set([...packet.contextSignals.map((signal) => signal.id), ...packet.competitorOffers.map((offer) => offer.id)]);
 }
 
-/** Rejects content citing unknown evidence or stating a price the packet does not contain. */
-export function validateGeneratedContent(packet: ContentPacket, content: { text: string; evidenceIds?: string[] }): string[] {
+const PRICE = /\$\d+(?:\.\d{1,2})?/g;
+const PERCENT = /\d+(?:\.\d+)?\s?%/g;
+const priceCents = (match: string) => Math.round(Number(match.slice(1)) * 100);
+
+/**
+ * Rejects content citing unknown evidence or stating a figure the packet does not contain.
+ * Social copy may state only the offer's own prices and discount. An explanation may also
+ * quote the packet's other figures: competitor prices, the change vs. usual, the assumed
+ * response scenarios, and any figure written in the reason, assumptions, or signal notes.
+ */
+export function validateGeneratedContent(packet: ContentPacket, content: { text: string; evidenceIds?: string[]; explanation?: boolean }): string[] {
   const problems: string[] = [];
   const allowed = allowedEvidenceIds(packet);
   for (const id of content.evidenceIds ?? []) if (!allowed.has(id)) problems.push(`Unknown evidence reference: ${id}`);
-  const allowedPrices = new Set([packet.selected.proposedPriceCents, packet.selected.regularPriceCents].map(dollars));
-  for (const match of content.text.match(/\$\d+(?:\.\d{2})?/g) ?? []) {
-    const normalized = dollars(Math.round(Number(match.slice(1)) * 100));
-    if (!allowedPrices.has(normalized)) problems.push(`Unsupported price in copy: ${match}`);
+
+  const { selected } = packet;
+  const prices = new Set([selected.proposedPriceCents, selected.regularPriceCents]);
+  const percentages = [selected.terms.discountPct];
+  if (content.explanation) {
+    const packetText = [packet.deterministicReason, ...packet.assumptions, ...packet.contextSignals.map((signal) => signal.whyItMatters), ...packet.competitorOffers.map((offer) => offer.comparabilityNotes)].join(" ");
+    for (const offer of packet.competitorOffers) if (offer.priceCents !== null) prices.add(offer.priceCents);
+    for (const match of packetText.match(PRICE) ?? []) prices.add(priceCents(match));
+    percentages.push(Math.abs(packet.outlook.changeVsUsual) * 100, ...selected.responseScenarios.map((scenario) => scenario.assumedUnitChange * 100), ...(packetText.match(PERCENT) ?? []).map(Number.parseFloat));
   }
-  for (const match of content.text.match(/\d+\s?%/g) ?? []) {
-    if (Number.parseInt(match, 10) !== packet.selected.terms.discountPct) problems.push(`Unsupported percentage in copy: ${match}`);
+  for (const match of content.text.match(PRICE) ?? []) {
+    if (!prices.has(priceCents(match))) problems.push(`Unsupported price in copy: ${match}`);
   }
+  for (const match of content.text.match(PERCENT) ?? []) {
+    const value = Number.parseFloat(match);
+    // A packet figure may be quoted exactly or rounded to a whole percent.
+    if (!percentages.some((figure) => Math.abs(figure - value) < 0.051 || Math.round(figure) === value)) problems.push(`Unsupported percentage in copy: ${match}`);
+  }
+  return problems;
+}
+
+/** Wording that would tell a customer a discounted item costs nothing. */
+const IMPLIES_FREE = /\bon us\b|\bon the house\b|\bfor free\b|\bcomplimentary\b/i;
+
+/** Social copy must also carry the exact offer price and must not read as a giveaway. */
+function socialProblems(packet: ContentPacket, output: Pick<SocialDraft, "caption" | "creativeBrief">): string[] {
+  const problems = validateGeneratedContent(packet, { text: `${output.caption} ${output.creativeBrief}` });
+  if (IMPLIES_FREE.test(output.caption)) problems.push("Caption implies the item is free");
+  if (packet.selected.kind === "discount" && !output.caption.includes(dollars(packet.selected.proposedPriceCents))) problems.push("Caption omits the offer price");
   return problems;
 }
 
@@ -103,7 +133,7 @@ export async function generateExplanation(packet: ContentPacket, model?: Content
   if (model) {
     try {
       const output = await model.explain(packet);
-      const problems = validateGeneratedContent(packet, { text: output.summary, evidenceIds: output.evidenceIds });
+      const problems = validateGeneratedContent(packet, { text: output.summary, evidenceIds: output.evidenceIds, explanation: true });
       if (problems.length === 0) return { ...output, ...stamp, source: "model" };
       console.warn("[content] explanation rejected by validation; using template:", problems);
     } catch (error) {
@@ -146,7 +176,7 @@ export async function generateSocialDraft(packet: ContentPacket, model?: Content
   if (model) {
     try {
       const output = await model.draftSocial(packet);
-      const problems = validateGeneratedContent(packet, { text: `${output.caption} ${output.creativeBrief}` });
+      const problems = socialProblems(packet, output);
       if (problems.length === 0) {
         content = output;
         source = "model";

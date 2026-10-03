@@ -34,6 +34,20 @@ const lyingModel: ContentModel = {
 };
 assert.equal((await generateExplanation(packet, lyingModel)).source, "template");
 assert.equal((await generateSocialDraft(packet, lyingModel)).source, "template");
+// An explanation may quote packet figures beyond the offer (competitor price, change vs. usual); social copy may not.
+const rain = "ctx-downtown-rain";
+assert.deepEqual(validateGeneratedContent(packet, { text: "Demand is 1.6% below usual; a nearby pair sells at $12.00. Trial 10% off at $12.60.", evidenceIds: [rain], explanation: true }), []);
+assert.deepEqual(validateGeneratedContent(packet, { text: "Demand is 2% below usual.", explanation: true }), [], "a packet percentage may be rounded");
+assert.equal(validateGeneratedContent(packet, { text: "Demand is 6% below usual.", explanation: true }).length, 1);
+assert.equal(validateGeneratedContent(packet, { text: "A nearby pair sells at $12.00." }).length, 1);
+assert.equal(validateGeneratedContent(packet, { text: "ok", evidenceIds: [packet.recommendationId], explanation: true }).length, 1, "the recommendation ID is not evidence");
+const goodExplanation: ContentModel = { ...lyingModel, explain: async () => ({ summary: "Trial 10% off at $12.60; a nearby pair sells at $12.00.", evidenceIds: [rain], assumptions: [], risks: [] }) };
+assert.equal((await generateExplanation(packet, goodExplanation)).source, "model");
+// Social copy must carry the exact offer price and must not read as a giveaway.
+const social = (caption: string): ContentModel => ({ ...lyingModel, draftSocial: async () => ({ caption, creativeBrief: "Photo of the pair." }) });
+assert.equal((await generateSocialDraft(packet, social("Coffee & Pastry Pair for $12.60 (regularly $14.00), 10% off 2–5 p.m."))).source, "model");
+assert.equal((await generateSocialDraft(packet, social("Afternoon pick-me-up on us: 10% off for $12.60."))).source, "template");
+assert.equal((await generateSocialDraft(packet, social("Enjoy 10% off the Coffee & Pastry Pair, 2–5 p.m."))).source, "template", "a discount caption without the price is rejected");
 const failingModel: ContentModel = { explain: async () => { throw new Error("down"); }, draftSocial: async () => { throw new Error("down"); } };
 assert.equal((await generateExplanation(packet, failingModel)).source, "template");
 const explanation = await generateExplanation(packet);
