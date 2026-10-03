@@ -13,7 +13,7 @@ export const HISTORY_WEEKS = 8;
 
 export const CHAIN: Chain = {
   id: "harborline-coffee",
-  name: "Harborline Coffee",
+  name: "Disney Cafe",
   currency: "USD",
   policy: {
     maxDiscountPct: 10,

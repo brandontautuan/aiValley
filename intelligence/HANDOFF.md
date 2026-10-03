@@ -1,5 +1,9 @@
 # Role D handoff — data and AI content
 
+## Demo branding update
+- Visible chain name and fallback social captions use Disney Cafe. The chain ID, location/item IDs, fixture economics, and deterministic demand data remain unchanged.
+- `BRAND_TONE` guides optional model copy toward clear, lightly storybook-inspired language without character references or unsupported claims.
+
 ## Ready interfaces and paths
 - `data/index.ts`: `loadPlanningData({ date, scenario })` returns deterministic fixtures from `data/fixtures.ts`:
   - 3 stores and 5 items
