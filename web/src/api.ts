@@ -1,6 +1,7 @@
 import type {
   ActionPlanResponse,
   ApiError,
+  CompetitorResearchResponse,
   DecisionResponse,
   LocationOutlookResponse,
   OfferTerms,
@@ -46,6 +47,8 @@ export const api = {
   overview: (date: string, scenario: ScenarioId) => request<OverviewResponse>("GET", `/api/overview?${qs({ date, scenario })}`),
   outlook: (locationId: string, date: string, scenario: ScenarioId) =>
     request<LocationOutlookResponse>("GET", `/api/locations/${locationId}/outlook?${qs({ date, scenario })}`),
+  competitorResearch: (locationId: string, date: string) =>
+    request<CompetitorResearchResponse>("POST", `/api/locations/${locationId}/competitor-research`, { date }),
   openRecommendation: (locationId: string, date: string, scenario: ScenarioId) =>
     request<Recommendation>("POST", "/api/recommendations", { locationId, date, scenario }),
   editRecommendation: (id: string, expectedRevision: number, terms: OfferTerms) =>

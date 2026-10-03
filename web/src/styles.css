@@ -301,6 +301,27 @@ input, select { border: 1px solid var(--border-strong); background: var(--surfac
 .evidence li.inactive { opacity: 0.65; }
 .evidence p { margin: 4px 0 0; }
 
+/* ---------- Public-web competitor research ---------- */
+.research-panel h2 { margin: 2px 0 0; font-size: 1.2rem; }
+.research-panel .panel-head { align-items: flex-start; }
+.research-notice { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--warn); border-radius: 0 8px 8px 0; background: var(--warn-soft); font-size: 0.9rem; }
+.research-results { margin-top: 16px; }
+.research-overview { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; padding-bottom: 12px; font-size: 0.92rem; }
+.research-overview strong { font-family: var(--mono); font-size: 1.3rem; color: var(--accent-strong); }
+.research-profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.research-profile { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface-2); }
+.research-profile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.research-profile h3 { margin: 0; font-size: 1rem; }
+.research-profile-head p { margin: 3px 0 0; }
+.research-summary { margin: 12px 0; font-size: 0.88rem; line-height: 1.45; }
+.research-sources { display: flex; flex-direction: column; gap: 7px; }
+.research-source { border-radius: 8px; background: var(--surface); }
+.research-source summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 10px; font-size: 0.88rem; font-weight: 600; }
+.research-source summary span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-source-body { padding: 0 10px 10px; }
+.research-source-body p:last-child { margin-bottom: 0; }
+.research-claim { line-height: 1.45; }
+
 .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 28px 0 14px; scroll-margin-top: 16px; }
 .section-head h2 { font-size: 1.35rem; }
 .section-head p { margin: 4px 0 0; }

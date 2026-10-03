@@ -6,6 +6,7 @@ import { isCapacityHold } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
 import { DecisionBar } from "./DecisionBar.tsx";
+import { CompetitorResearchPanel } from "./CompetitorResearchPanel.tsx";
 import { DemandChart } from "./DemandChart.tsx";
 import { OptionCards } from "./OptionCards.tsx";
 import { PromotePanel } from "./PromotePanel.tsx";
@@ -99,6 +100,7 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
       </div>
 
       <EvidencePanel data={outlook.data} />
+      <CompetitorResearchPanel locationId={locationId} date={date} />
 
       {recommendation.error && <p className="error">{recommendation.error}</p>}
       {rec && selected && (

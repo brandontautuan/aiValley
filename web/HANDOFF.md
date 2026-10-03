@@ -15,6 +15,7 @@
     - Collapsible evidence.
     - `OptionCards`: break-even bar and low/base/high range for each option.
     - `TermsEditor`, `PromotePanel` (post preview checked field by field against the current terms, with a stale overlay), and a fixed `DecisionBar` at the bottom.
+    - `CompetitorResearchPanel`: manager-triggered Tavily context refresh with attributed source links, retrieval timestamps, excerpts, limitations, failure/unavailable states, and an explicit review-only boundary.
   - **ActionPlan:** day tabs, a store × hour timeline (promotion blocks, hold-price blocks, post-time pin), plan cards, replaced approvals, and "Copy plan as text".
   - **StrategyPanel:** multi-day strategy runs (owned by the other web session).
 - `web/src/api.ts`: typed client for every Role B endpoint; surfaces `ApiError` bodies.
@@ -41,4 +42,4 @@
 
 ## Known blockers and fallback behavior
 - There is no mock adapter yet; the UI runs against the live API only.
-- Tavily research UI is not built; the endpoint returns `FEATURE_UNAVAILABLE`.
+- Public-web competitor research is available from a location page. It never changes a recommendation or promotion copy; an audited manager-promotion workflow is still required before a verified source could enter planning data.
