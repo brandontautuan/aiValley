@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Location, SavedPlan, ScenarioId } from "../../../contracts/index.ts";
 import { api } from "../api.ts";
 import { brand } from "../brand.ts";
-import { addDays, dateLabel, hour, localTime, money, shortDate, timestamp, windowLabel } from "../format.ts";
+import { addDays, dateLabel, hour, localTime, money, scenarioLabel, shortDate, timestamp, windowLabel } from "../format.ts";
 import { isCapacityHold } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
@@ -115,7 +115,7 @@ export function ActionPlan({ date, scenario }: { date: string; scenario: Scenari
                   <>
                     <br />
                     <span className="muted small">
-                      Worth it at {plan.finalTerms.breakEvenUnits}+ {brand.itemNoun.plural} · {plan.scenario === "local-event" ? "Local event day" : "Typical day"}
+                      Worth it at {plan.finalTerms.breakEvenUnits}+ {brand.itemNoun.plural} · {scenarioLabel(plan.scenario)}
                     </span>
                   </>
                 )}

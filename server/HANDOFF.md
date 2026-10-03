@@ -60,3 +60,9 @@
   configured strategy agent as a demo fallback) and sends only a bounded
   planning packet. It never sends raw Tavily results. The planner validates all
   content before saving it to a revision.
+- `scenario` accepts `mock-<seed>` (1–9 digits) in addition to `typical` and `local-event`; `ScenarioId` in contracts reflects this.
+- The content packet carries `selected.weekday`; social copy that names any
+  other day of the week is rejected and the template is used.
+- Strategy requests now carry their own `instructions` (output shape, review
+  only supplied evidence, never mark items verified), so any running agent
+  owned by the key's Project can serve `ZOOWORK_AGENT_ID`.

@@ -1,6 +1,6 @@
 import type { LocationOutlookResponse, OverviewResponse, SavedPlan, ScenarioId } from "../../../contracts/index.ts";
 import { api } from "../api.ts";
-import { dateLabel, hour, pct, units, windowLabel } from "../format.ts";
+import { dateLabel, hour, mockSeedOf, pct, units, windowLabel } from "../format.ts";
 import { actionLabel, selectedCandidate, storeSentence } from "../insights.ts";
 import { hrefFor } from "../nav.ts";
 import { useLoad } from "../useLoad.ts";
@@ -47,23 +47,24 @@ export function Today({ date, scenario, onScenario }: { date: string; scenario: 
   const outlooks = summaries.map((summary) => data.outlooks[summary.location.id]);
   const promotions = summaries.filter((summary) => summary.selectedKind === "discount");
   const constrained = summaries.filter((summary) => summary.classification === "constrained");
+  const mock = mockSeedOf(scenario) !== null;
   const changes = outlooks.flatMap((outlook) =>
     outlook.contextSignals
-      .filter((signal) => signal.type === "event" && outlook.outlook.appliedSignalIds.includes(signal.id))
-      .slice(0, 1)
+      .filter((signal) => (mock || signal.type === "event") && outlook.outlook.appliedSignalIds.includes(signal.id))
+      .slice(0, mock ? 2 : 1)
       .map((signal) => {
         const affected = outlook.outlook.hours.filter((entry) => entry.signalIds.includes(signal.id));
-        return { id: signal.id, text: `${outlook.location.name} ${hour(affected[0].hour)}–${hour(affected[affected.length - 1].hour + 1)}: ${pct(signal.assumedOrderAdjustment)} assumed (${signal.source.replace(/^Fixture: /, "")})` };
+        return { id: signal.id, text: `${outlook.location.name} ${hour(affected[0].hour)}–${hour(affected[affected.length - 1].hour + 1)}: ${pct(signal.assumedOrderAdjustment)} assumed (${signal.source.replace(/^(Fixture|Mock): /, "")})` };
       }),
   );
-  const unchanged = outlooks.filter((outlook) => !outlook.contextSignals.some((signal) => signal.type === "event" && outlook.outlook.appliedSignalIds.includes(signal.id)));
+  const unchanged = outlooks.filter((outlook) => !outlook.contextSignals.some((signal) => (mock || signal.type === "event") && outlook.outlook.appliedSignalIds.includes(signal.id)));
 
   return (
     <section className={loading ? "loading" : ""}>
       {head}
-      {scenario === "local-event" && (
+      {scenario !== "typical" && (
         <div className="chips">
-          {changes.length === 0 && <span className="chip neutral">No event records apply to {weekday}.</span>}
+          {changes.length === 0 && <span className="chip neutral">{mock ? "No mock signals apply" : "No event records apply"} to {weekday}.</span>}
           {changes.map((change) => (
             <span key={change.id} className="chip info">What changed: {change.text}</span>
           ))}

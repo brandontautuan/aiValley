@@ -26,6 +26,11 @@
 - Unsupported model numbers or evidence fall back to the template, and so does a model failure.
 - Tavily returns `unavailable` without a transport; the deterministic transport test produces review-only evidence with no inferred price.
 
+## Mock random datasets
+- `data/mock.ts`: scenario `mock-<seed>` generates a fictional dataset from the seed — store traffic level, daypart shape and capacity, item costs and mix, and 0–2 dated local signals per store. The same seed and date always give the same data; history is the 8 weeks before the planning date. Curated fixtures are untouched.
+- The engine is unchanged. Across seeds 1–60 on 2026-10-05 it returned roughly 14% discounts, 26% capacity holds and 60% other keep-price decisions.
+- Every mock signal is titled "(mock)" and its adjustment is an assumption; `fixtureLabel` reads "Mock dataset #<seed> …".
+
 ## Next
 - Implement a server-side `ContentModel`, e.g. a Claude call that reads `ANTHROPIC_API_KEY`. Hand it to B so it can be passed into `createPlanner`.
 - B needs to provide/freeze a contract for configured competitor profiles and a research response, then wire `searchCompetitorOffers({ locationId, locationName, planningDate, competitors: SF_COMPETITOR_PROFILES[locationId] }, createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }))` into the current `POST /api/locations/:id/competitor-research` 501 stub. The server, not this module, reads the key. Return only its review-only evidence; manager promotion into canonical competitor offers remains a separate auditable write.

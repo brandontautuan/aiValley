@@ -40,6 +40,10 @@
 - **B (optional performance):** the Today, Week and Month views make one outlook request per store and day (21 for Week; up to 31 action-plan requests for Month). A range endpoint, e.g. `GET /api/outlook/range?start=&days=`, would cut this to one request.
 - **D (content):** only Oct 5 has context records, so Week and Month look sparse on later days. More dated fixture events would make the forward views richer, e.g. a Thursday game, a Saturday concert, a holiday and rain days.
 
+## Mock data
+- `ScenarioToggle` has a third button, "Random mock data". Each press picks a new seed and sets the scenario to `mock-<seed>`; the seed is carried in the URL, so a dataset can be reloaded or shared.
+- Today shows "What changed" chips for the mock signals that apply; Month still compares the two curated scenarios only.
+
 ## Known blockers and fallback behavior
 - There is no mock adapter yet; the UI runs against the live API only.
 - Public-web competitor research is available from a location page. It needs `TAVILY_API_KEY`; otherwise it visibly reports unavailable while fixture planning continues. It never changes a recommendation or promotion copy; an audited manager-promotion workflow is still required before a verified source could enter planning data.

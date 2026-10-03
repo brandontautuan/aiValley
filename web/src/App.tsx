@@ -10,6 +10,7 @@ import { BrandMark } from "./components/BrandMark.tsx";
 import { Strategy } from "./components/StrategyPanel.tsx";
 import { Today } from "./components/Today.tsx";
 import { Week } from "./components/Week.tsx";
+import { mockSeedOf } from "./format.ts";
 import { hrefFor, parseHash, routePath, type Route } from "./nav.ts";
 
 const DEFAULT_DATE = "2026-10-05";
@@ -86,7 +87,11 @@ export function App() {
           <button className="ghost" onClick={resetDemo}>Reset demo</button>
         </div>
       </header>
-      <div className="fixture-banner">{brand.fixtureNotice}</div>
+      <div className="fixture-banner">
+        {mockSeedOf(scenario) !== null
+          ? `Mock data #${mockSeedOf(scenario)}: randomly generated fictional sales, costs and local signals; competitor offers are the curated fixtures. Forecasts and demand responses are estimates, not measured results.`
+          : brand.fixtureNotice}
+      </div>
       <main key={epoch}>
         {route.page === "today" && <Today date={date} scenario={scenario} onScenario={setScenario} />}
         {route.page === "week" && <Week date={date} scenario={scenario} />}

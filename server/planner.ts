@@ -26,7 +26,7 @@ import {
   type StrategyRunResponse,
   type TrendEvidence,
 } from "../contracts/index.ts";
-import { DEFAULT_PLANNING_DATE, loadPlanningData, SF_COMPETITOR_PROFILES } from "../data/index.ts";
+import { DEFAULT_PLANNING_DATE, loadPlanningData, mockSeed, SF_COMPETITOR_PROFILES } from "../data/index.ts";
 import { calculateLocationOutlook, ENGINE_ASSUMPTIONS, evaluateOffers, selectRecommendedCandidate } from "../engine/index.ts";
 import { BRAND_TONE, generateExplanation, generateSocialDraft, searchCompetitorOffers, type ContentModel, type ContentPacket, type TavilySearchTransport } from "../intelligence/index.ts";
 import type { Store } from "./store.ts";
@@ -55,7 +55,8 @@ function parseDate(value: unknown): string {
 
 function parseScenario(value: unknown): ScenarioId {
   const scenario = value ?? "typical";
-  if (!SCENARIO_IDS.includes(scenario as ScenarioId)) fail(400, "BAD_REQUEST", `scenario must be one of ${SCENARIO_IDS.join(", ")}`);
+  if (typeof scenario === "string" && mockSeed(scenario) !== null) return scenario as ScenarioId;
+  if (!SCENARIO_IDS.includes(scenario as ScenarioId)) fail(400, "BAD_REQUEST", `scenario must be one of ${SCENARIO_IDS.join(", ")}, or mock-<seed>`);
   return scenario as ScenarioId;
 }
 
