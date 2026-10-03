@@ -459,6 +459,52 @@ export interface StrategyRunResponse {
   strategyRun: StrategyRun;
 }
 
+// ---------- Competitor research (server-only Tavily refresh) ----------
+
+export type CompetitorResearchStatus = "queued" | "running" | "completed" | "unavailable" | "failed";
+
+export interface CompetitorResearchRun {
+  id: string;
+  status: CompetitorResearchStatus;
+  locationId: string;
+  planningDate: string;
+  providerRunId?: string;
+  createdAt: string;
+  errorCode?: "TAVILY_UNAVAILABLE" | "TAVILY_FAILED";
+}
+
+/** Public-web source awaiting manager verification; it is not a comparable offer. */
+export interface CompetitorResearchEvidence {
+  evidenceId: string;
+  researchRunId: string;
+  competitorId: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  retrievedAt: string;
+  publishedAt?: string;
+  claimText: string;
+  itemName: null;
+  priceCents: null;
+  portion: null;
+  inclusions: null;
+  channel: null;
+  terms: null;
+  observationStatus: "needs_review";
+  comparabilityNotes: string;
+  limitations: string[];
+}
+
+export interface CompetitorResearchResult {
+  run: CompetitorResearchRun;
+  evidence: CompetitorResearchEvidence[];
+}
+
+export interface CompetitorResearchResponse {
+  contractVersion: number;
+  fixtureLabel: string;
+  results: CompetitorResearchResult[];
+}
+
 export interface ApiError {
   code:
     | "NOT_FOUND"

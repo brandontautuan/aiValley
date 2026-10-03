@@ -36,11 +36,11 @@ coffee-shop demo chain, with coffee fixtures and coffee-specific fallback copy.
 and the bowl emoji in fallback explanation and social-draft templates. Retain
 the exact-term and evidence validation already present.
 
-## Role A — `web/**` — branding completed; strategy UI remains deferred
+## Role A — `web/**` — branding and strategy UI completed
 
-Visible branding now uses Harborline Coffee. The UI still needs to display
-Role B's strategy-run lifecycle, ranked actions, evidence freshness, and the
-manager approval boundary.
+Visible branding now uses Harborline Coffee. The strategy UI displays the
+strategy-run lifecycle, ranked actions, evidence freshness, and manager
+approval boundaries. Tavily evidence-review UI remains stretch work.
 
 ### ZooWork environment example
 
@@ -60,8 +60,9 @@ manager-reviewable strategy workflow available.
 
 ## Role B Follow-Up
 
-Strategy-run contracts, routes, persistence, and optional ZooWork Growth
-Planner orchestration are present. Band orchestration, Tavily route wiring, and
-the strategy UI remain stretch work. Existing one-day recommendations remain
-the authoritative economics and approval artifacts; strategy runs reference
-them rather than replacing them.
+Strategy-run contracts, routes, persistence, optional ZooWork Growth Planner
+orchestration, the strategy UI, and the bounded Tavily refresh route are
+present. Band orchestration, Tavily evidence-review/promotion, and dynamic
+competitor discovery remain stretch work. Existing one-day recommendations
+remain the authoritative economics and approval artifacts; strategy runs
+reference them rather than replacing them.

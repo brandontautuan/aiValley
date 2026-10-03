@@ -4,6 +4,7 @@ import { extname, join, normalize, resolve } from "node:path";
 import { ApiFailure, createPlanner, type Planner } from "./planner.ts";
 import { createFileStore } from "./store.ts";
 import { createZooWorkStrategyWorkflowFromEnv } from "./zoowork.ts";
+import { createTavilySearchTransport } from "../intelligence/index.ts";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const WEB_DIST = join(ROOT, "web", "dist");
@@ -30,9 +31,7 @@ const routes: Array<[method: string, pattern: RegExp, handler: Handler]> = [
   [
     "POST",
     /^\/api\/locations\/([\w-]+)\/competitor-research$/,
-    () => {
-      throw new ApiFailure(501, { code: "FEATURE_UNAVAILABLE", message: "Competitor research (Tavily) is a stretch goal and is not enabled. Fixture competitor offers remain available.", retryable: false });
-    },
+    (planner, [id], _query, body) => planner.competitorResearch(id, body as { date?: unknown }),
   ],
 ];
 
@@ -102,6 +101,7 @@ if (process.argv[1] === import.meta.filename) {
     // Credentials stay in this server entry point; absent or invalid config uses
     // the planner's manager-reviewable deterministic fallback.
     strategyWorkflow: createZooWorkStrategyWorkflowFromEnv(),
+    tavilySearchTransport: createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }),
   });
   createApp(planner).listen(port, () => {
     console.log(`Revenue planner API on http://localhost:${port} (store: ${dataDir})`);

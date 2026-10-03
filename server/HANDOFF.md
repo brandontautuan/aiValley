@@ -38,7 +38,7 @@
 
 ## Known blockers and fallback behavior
 - No model adapter is wired: `createPlanner` accepts an optional `model`, and template content is used when it's absent.
-- The competitor-research endpoints return 501 `FEATURE_UNAVAILABLE` (stretch goal).
+- `POST /api/locations/:id/competitor-research` refreshes only configured coffee-shop profile seeds. With no Tavily key it returns per-profile `unavailable` states; sources always remain `needs_review` and cannot alter pricing or social copy.
 - `createPlanner` accepts an optional server-only `strategyWorkflow` adapter.
   It may return ZooWork and Band identifiers plus bounded research evidence.
   Only evidence marked `verified` can inform ranked actions. The ZooWork adapter
