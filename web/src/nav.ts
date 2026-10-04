@@ -1,6 +1,6 @@
 import type { ScenarioId } from "../../contracts/index.ts";
 
-/** Hash routes: #/, #/week, #/month, #/strategy, #/plan, #/how-it-works, #/location/:id — each with optional ?date=&scenario=. */
+/** Hash routes: #/, #/week, #/month, #/strategy, #/plan, #/how-it-works, #/onboarding, #/location/:id — each with optional ?date=&scenario=. */
 export type Route =
   | { page: "today" }
   | { page: "week" }
@@ -8,6 +8,7 @@ export type Route =
   | { page: "strategy" }
   | { page: "plan" }
   | { page: "how-it-works" }
+  | { page: "onboarding" }
   | { page: "location"; id: string };
 
 export interface ViewParams {
@@ -29,7 +30,7 @@ export function parseHash(hash = window.location.hash): { route: Route; params: 
 
   let route: Route = { page: "today" };
   if (page === "location" && id) route = { page: "location", id };
-  else if (page === "week" || page === "month" || page === "strategy" || page === "plan" || page === "how-it-works") route = { page };
+  else if (page === "week" || page === "month" || page === "strategy" || page === "plan" || page === "how-it-works" || page === "onboarding") route = { page };
   return { route, params };
 }
 

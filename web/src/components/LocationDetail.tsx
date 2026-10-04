@@ -79,10 +79,6 @@ export function LocationDetail({ locationId, date, scenario }: { locationId: str
               <summary><strong>Understand the forecast</strong><span>See when this store is busy and what may affect demand.</span></summary>
               <div className="disclosure-body">
                 <p className="muted">The chart compares usual customer orders with the estimate for this date. The capacity line shows how many orders the store can serve per hour.</p>
-                <div className="legend">
-                  <span><i className="sw baseline" />Usual {weekday}</span><span><i className="sw estimate" />Estimate</span>
-                  <span><i className="sw win" />Selected hours</span><span><i className="sw over" />At capacity</span>
-                </div>
                 <div className="chart-scroll"><DemandChart response={outlook.data} window={selected.terms.window} promo={selected.kind === "discount"} /></div>
                 <p className="small muted">{location.profile} Open {location.openingHours.open}:00–{location.openingHours.close}:00 · Can serve {location.hourlyCapacityOrders} orders per hour.</p>
                 <details><summary>How this estimate was made</summary><p className="small">Based on {forecast.observationCount} past {weekday}s.</p><ul className="notes">{forecast.notes.map((note) => <li key={note}>{note}</li>)}</ul></details>
