@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ScenarioId } from "../../contracts/index.ts";
 import { api } from "./api.ts";
 import { brand } from "./brand.ts";
 import { ActionPlan } from "./components/ActionPlan.tsx";
 import { LocationDetail } from "./components/LocationDetail.tsx";
 import { Month } from "./components/Month.tsx";
+import { Onboarding } from "./components/Onboarding.tsx";
 import { ScenarioToggle } from "./components/ScenarioToggle.tsx";
 import { BrandMark } from "./components/BrandMark.tsx";
 import { UiIcon } from "./components/UiIcon.tsx";
@@ -39,6 +40,30 @@ export function App() {
   const [epoch, setEpoch] = useState(0);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDetailsElement>(null);
+
+  // The settings menu closes on an outside click or Escape, like other dropdowns.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [settingsOpen]);
+
+  function chooseScenario(next: ScenarioId) {
+    setScenario(next);
+    setSettingsOpen(false);
+  }
 
   // Links may omit ?date/&scenario; those keep the current values.
   useEffect(() => {
@@ -105,14 +130,18 @@ export function App() {
       </header>
       <div className="demo-strip">
         <span>{mockSeedOf(scenario) !== null ? `Mock data #${mockSeedOf(scenario)} · Random fictional sales, costs, and local signals; competitor offers are sample records. Forecasts are estimates.` : brand.fixtureNotice}</span>
-        <details className="demo-settings">
-          <summary><UiIcon name="sliders" size={16} />{scenarioLabel(scenario)} · Demo settings<UiIcon className="menu-chevron" name="chevronDown" size={16} /></summary>
-          <div className="panel demo-options">
+        <details className="demo-settings" ref={settingsRef} open={settingsOpen}>
+          <summary onClick={(event) => { event.preventDefault(); setSettingsOpen((value) => !value); }}><UiIcon name="sliders" size={16} />{scenarioLabel(scenario)} · Demo settings<UiIcon className="menu-chevron" name="chevronDown" size={16} /></summary>
+          {/* Rendered only while open: Chrome can leave the animated panel painted after <details> closes. */}
+          {settingsOpen && <div className="panel demo-options">
             <p>Try a different day to see how local events affect the suggestions.</p>
-            <ScenarioToggle value={scenario} onChange={setScenario} compact />
+            <ScenarioToggle value={scenario} onChange={chooseScenario} compact />
             <p className="small muted">Reset clears saved plans and edits for this demo.</p>
-            <button disabled={resetting} onClick={resetDemo}>{resetting ? "Resetting…" : "Reset demo"}</button>
-          </div>
+            <div className="demo-option-actions">
+              <button disabled={resetting} onClick={resetDemo}>{resetting ? "Resetting…" : "Reset demo"}</button>
+              <a className="button" href={hrefFor("/onboarding", params)} onClick={() => setSettingsOpen(false)}>Show store setup</a>
+            </div>
+          </div>}
         </details>
       </div>
       {resetError && <p className="error" role="alert">{resetError}</p>}
@@ -124,6 +153,7 @@ export function App() {
         {route.page === "strategy" && <Strategy date={date} scenario={scenario} />}
         {route.page === "plan" && <ActionPlan date={date} scenario={scenario} />}
         {route.page === "how-it-works" && <HowItWorks params={params} />}
+        {route.page === "onboarding" && <Onboarding date={date} scenario={scenario} />}
       </main>
       <SponsorFooter href={hrefFor("/how-it-works", params)} />
     </div>
