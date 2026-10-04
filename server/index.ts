@@ -38,6 +38,16 @@ const routes: Array<[method: string, pattern: RegExp, handler: Handler]> = [
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
   if (request.method === "GET") return undefined;
+  // A hosting platform (Vercel) may have read the body already and attached it to the request.
+  const supplied = (request as IncomingMessage & { body?: unknown }).body;
+  if (supplied !== undefined && supplied !== null) {
+    if (typeof supplied !== "string" && !Buffer.isBuffer(supplied)) return supplied;
+    try {
+      return supplied.length ? JSON.parse(supplied.toString()) : {};
+    } catch {
+      throw new ApiFailure(400, { code: "BAD_REQUEST", message: "Body must be JSON", retryable: false });
+    }
+  }
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
@@ -65,8 +75,9 @@ function serveStatic(pathname: string, response: ServerResponse): boolean {
   return true;
 }
 
-export function createApp(planner: Planner) {
-  return createServer(async (request, response) => {
+/** The request listener on its own, so a serverless entry (api/index.js) can call it without a listening server. */
+export function createHandler(planner: Planner) {
+  return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const send = (status: number, payload: unknown) => {
       response.statusCode = status;
@@ -91,20 +102,29 @@ export function createApp(planner: Planner) {
       console.error(error);
       send(500, { code: "INTERNAL", message: "Unexpected server error", retryable: true });
     }
+  };
+}
+
+export function createApp(planner: Planner) {
+  return createServer(createHandler(planner));
+}
+
+/** Builds the planner from server-side environment settings; missing credentials keep the fallbacks available. */
+export async function createPlannerFromEnv(dataDir: string) {
+  const [strategyWorkflow, model] = await Promise.all([createZooWorkStrategyWorkflowFromEnv(), createZooWorkContentModelFromEnv()]);
+  const planner = createPlanner({
+    store: createFileStore(dataDir),
+    model,
+    strategyWorkflow,
+    tavilySearchTransport: createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }),
   });
+  return { planner, model, strategyWorkflow };
 }
 
 if (process.argv[1] === import.meta.filename) {
   const port = Number(process.env.PORT ?? 3000);
   const dataDir = resolve(ROOT, process.env.DATA_DIR ?? ".data");
-  const [strategyWorkflow, model] = await Promise.all([createZooWorkStrategyWorkflowFromEnv(), createZooWorkContentModelFromEnv()]);
-  const planner = createPlanner({
-    store: createFileStore(dataDir),
-    model,
-    // Missing credentials or SDK keep the manager-reviewable fallback available.
-    strategyWorkflow,
-    tavilySearchTransport: createTavilySearchTransport({ apiKey: process.env.TAVILY_API_KEY }),
-  });
+  const { planner, model, strategyWorkflow } = await createPlannerFromEnv(dataDir);
   createApp(planner).listen(port, () => {
     console.log(`Revenue planner API on http://localhost:${port} (store: ${dataDir})`);
     console.log(`[zoowork] content model: ${model ? "loaded" : "NOT loaded (templates only)"}; strategy workflow: ${strategyWorkflow ? "loaded" : "NOT loaded"}`);
